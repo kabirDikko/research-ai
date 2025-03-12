@@ -58,9 +58,7 @@ jobs:
           terraform plan -var-file=terraform.tfvars -out=tfplan
     
           
-      - name: Upload Terraform Plan
-        working-directory: ./terraform
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: tfplan
           path: tfplan
