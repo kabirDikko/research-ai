@@ -30,9 +30,6 @@ variable "collection_name" {
   type        = string
 }
 
-variable "security_policy_name" {
-  description = "The name of the OpenSearch Serverless security policy"
-  type        = string
-}
+
 
 

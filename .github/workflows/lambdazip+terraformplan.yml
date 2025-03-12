@@ -53,9 +53,14 @@ jobs:
         run: |
           terraform init
           terraform plan -var-file=terraform.tfvars -out=tfplan
-          
+
+      - name: List terraform directory
+        working-directory: ./terraform
+        run: ls -la
+
       - name: Upload Terraform Plan
+        working-directory: ./terraform
         uses: actions/upload-artifact@v3
         with:
           name: tfplan
-          path: terraform/tfplan
+          path: tfplan
