@@ -42,6 +42,7 @@ jobs:
       - name: Read terraform.tfvars
         id: read_tfvars
         run: |
+          cd terraform
           cat terraform.tfvars
       - name: Run Terraform
         run: |
