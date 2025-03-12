@@ -8,7 +8,7 @@ on:
 jobs:
   terraform-apply:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -34,9 +34,10 @@ jobs:
               repo: context.repo.repo,
               run_id: context.payload.workflow_run.id
             });
-            const matchArtifact = artifacts.data.artifacts.find((artifact) => {
-              return artifact.name == "tfplan"
-            });
+            const matchArtifact = artifacts.data.artifacts.find((artifact) => artifact.name === "tfplan");
+            if (!matchArtifact) {
+              throw new Error('No tfplan artifact found.');
+            }
             const download = await github.rest.actions.downloadArtifact({
               owner: context.repo.owner,
               repo: context.repo.repo,

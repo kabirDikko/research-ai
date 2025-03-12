@@ -6,4 +6,3 @@ bedrock_endpoint_url  = "https://bedrock.example.com"
 
 # OpenSearch Serverless specific variables
 collection_name       = "story-documents"
-security_policy_name  = "opensearch-serverless-policy"

@@ -1,12 +1,14 @@
+data "aws_caller_identity" "current" {}
+
 resource "aws_opensearchserverless_collection" "this" {
-  name = var.collection_name
-  type = "SEARCH"
+  name       = var.collection_name
+  type       = "SEARCH"
   depends_on = [aws_opensearchserverless_security_policy.encryption_policy]
 }
 
 
 resource "aws_opensearchserverless_security_policy" "encryption_policy" {
-  name        = "${var.collection_name}-encryption-policy"
+  name        = "${var.collection_name}-enc-policy"
   type        = "encryption"
   description = "encryption policy for ${var.collection_name}"
   policy = jsonencode({
@@ -14,7 +16,7 @@ resource "aws_opensearchserverless_security_policy" "encryption_policy" {
       {
         Resource = [
           "collection/${var.collection_name}"
-        ],
+        ]
         ResourceType = "collection"
       }
     ],
@@ -40,7 +42,7 @@ resource "aws_opensearchserverless_access_policy" "data_policy" {
           ]
         },
         {
-          ResourceType = "collection", 
+          ResourceType = "collection",
           Resource = [
             "collection/${var.collection_name}"
           ],
@@ -78,7 +80,7 @@ resource "aws_opensearchserverless_security_policy" "network_policy" {
       ]
     },
     {
-      Description = "Public access for dashboards", 
+      Description = "Public access for dashboards",
       Rules = [
         {
           ResourceType = "dashboard",
