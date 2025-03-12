@@ -56,16 +56,12 @@ jobs:
         run: |
           terraform init
           terraform plan -var-file=terraform.tfvars -out=tfplan
-          ls -la
-          
-      - name: Download upload-artifact action
-        run: |
-          curl -o upload-artifact.zip -L https://github.com/actions/upload-artifact/archive/refs/tags/v3.zip
-          unzip upload-artifact.zip
+    
           
       - name: Upload Terraform Plan
         working-directory: ./terraform
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: tfplan
           path: tfplan
+          if-no-files-found: error
