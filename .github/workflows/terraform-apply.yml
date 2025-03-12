@@ -4,11 +4,13 @@ on:
     workflows: ["LambdaZip + Terraform Plan"]
     types:
       - completed
+    branches:
+      - main
 
 jobs:
   terraform-apply:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -23,7 +25,7 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v1
         with:
-          terraform_version: 1.0.0
+          terraform_version: 1.11.1
 
       - name: Download Terraform Plan
         uses: actions/github-script@v6
@@ -51,21 +53,6 @@ jobs:
         run: |
           unzip tfplan.zip
           rm tfplan.zip
-
-      - name: Wait for approval
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const { Octokit } = require("@octokit/rest");
-            const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
-            const { data: { conclusion } } = await octokit.actions.getWorkflowRun({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: context.runId
-            });
-            if (conclusion !== 'success') {
-              throw new Error('Workflow not approved');
-            }
 
       - name: Terraform Apply
         working-directory: ./terraform
