@@ -8,7 +8,7 @@ resource "aws_opensearchserverless_collection" "this" {
 
 
 resource "aws_opensearchserverless_security_policy" "encryption_policy" {
-  name        = "${var.collection_name}-encryption-policy"
+  name        = "${var.collection_name}-enc-policy"
   type        = "encryption"
   description = "encryption policy for ${var.collection_name}"
   policy = jsonencode({
