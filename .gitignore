@@ -4,10 +4,34 @@
 .terraform/
 .DS_Store
 
-# Ignore all files in the lambda_functions directory except for requirements.txt and .py files and zip files
+# Ignore all files in the lambda_functions directory except for requirements.txt and ingest.py and query.py and requirements.txt
 lambda_functions/
 !lambda_functions/requirements.txt
-!lambda_functions/*.py
-!lambda_functions/*.zip
+!lambda_functions/ingest.py
+!lambda_functions/query.py
+
+# Ignore Python packages and build artifacts
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
 
 # Ignore all files in the lambda_functions directory except for requirements.txt and .py files
