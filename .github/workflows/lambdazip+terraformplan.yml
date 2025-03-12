@@ -61,5 +61,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: tfplan
-          path: tfplan
+          path: ./terraform/
           if-no-files-found: error
