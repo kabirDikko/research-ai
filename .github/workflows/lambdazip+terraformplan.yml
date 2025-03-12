@@ -4,17 +4,6 @@ on:
   push:
     branches:
       - '*'
-    paths:
-      - 'lambda_functions/**'
-      - 'terraform/**'
-      - '.github/workflows/**'
-  pull_request:
-    branches: 
-      - '*'
-    paths:
-      - 'lambda_functions/**' 
-      - 'terraform/**'
-      - '.github/workflows/**'
 
 jobs:
   zip-lambda-functions:
