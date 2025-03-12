@@ -2,3 +2,12 @@
 *.tfstate
 *.tfstate.backup
 .terraform/
+.DS_Store
+
+# Ignore all files in the lambda_functions directory except for requirements.txt and .py files and zip files
+lambda_functions/
+!lambda_functions/requirements.txt
+!lambda_functions/*.py
+!lambda_functions/*.zip
+
+# Ignore all files in the lambda_functions directory except for requirements.txt and .py files
