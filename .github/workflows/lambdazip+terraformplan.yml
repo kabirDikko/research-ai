@@ -3,8 +3,11 @@ name: LambdaZip + Terraform Plan
 on:
   push:
     branches:
-      - '*'
-  workflow_dispatch:
+      - '*'  # Trigger on any branch
+  pull_request:
+    branches:
+      - '*'  # Trigger on any branch
+  workflow_dispatch:  # Allows manual triggering
 
 jobs:
   zip-lambda-functions:
@@ -53,14 +56,9 @@ jobs:
         run: |
           terraform init
           terraform plan -var-file=terraform.tfvars -out=tfplan
-
-      - name: List terraform directory
-        working-directory: ./terraform
-        run: ls -la
-
+          
       - name: Upload Terraform Plan
-        working-directory: ./terraform
         uses: actions/upload-artifact@v3
         with:
           name: tfplan
-          path: tfplan
+          path: terraform/tfplan
