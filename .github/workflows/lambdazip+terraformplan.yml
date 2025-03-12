@@ -2,9 +2,8 @@ name: LambdaZip + Terraform Plan
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    branches:
+      - '*'
 
 jobs:
   zip-lambda-functions:
