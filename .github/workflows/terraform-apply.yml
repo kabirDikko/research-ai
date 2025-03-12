@@ -1,0 +1,38 @@
+name: Terraform Apply
+on:
+  workflow_run:
+    workflows: ["LambdaZip + Terraform Plan"]
+    types:
+      - completed
+
+jobs:
+  terraform-apply:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v1
+        with:
+          terraform_version: 1.0.0
+
+      - name: Wait for approval
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { Octokit } = require("@octokit/rest");
+            const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+            const { data: { conclusion } } = await octokit.actions.getWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId
+            });
+            if (conclusion !== 'success') {
+              throw new Error('Workflow not approved');
+            }
+
+      - name: Terraform Apply
+        run: |
+          terraform apply -var-file=terraform.tfvars -auto-approve
