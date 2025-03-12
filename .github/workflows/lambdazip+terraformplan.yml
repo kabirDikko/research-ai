@@ -64,7 +64,8 @@ jobs:
           unzip upload-artifact.zip
           
       - name: Upload Terraform Plan
+        working-directory: ./terraform
         uses: actions/upload-artifact@v3
         with:
           name: tfplan
-          path: ./terraform/tfplan
+          path: tfplan
