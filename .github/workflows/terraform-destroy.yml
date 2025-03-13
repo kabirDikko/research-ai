@@ -26,6 +26,16 @@ jobs:
         working-directory: ./terraform
         run: terraform init
 
-      - name: Terraform Destroy
+      - name: Terraform Destroy (excluding S3 buckets)
         working-directory: ./terraform
-        run: terraform destroy -auto-approve
+        run: |
+          terraform destroy -auto-approve \
+            -target="module.lambda" \
+            -target="module.api_gateway" \
+            -target="module.opensearch" \
+            -target="module.bedrock" \
+            -target="aws_iam_role_policy.lambda_policy" \
+            -target="aws_iam_role.lambda_role" \
+            -target="aws_opensearchserverless_vpc_endpoint.vpc_endpoint" \
+            -target="aws_security_group.vpc_endpoint" \
+            -target="module.vpc"
