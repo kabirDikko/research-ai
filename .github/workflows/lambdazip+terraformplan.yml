@@ -3,12 +3,8 @@ name: LambdaZip + Terraform Plan
 on:
   push:
     branches:
-      - '**'  # Trigger on any branch and all subdirectories
-    paths-ignore:
-      - '**.md'  # Ignore markdown files
-  pull_request:
-    branches:
-      - '*'  # Trigger on any branch
+      - '**'        # All branches
+      - '!main'     # Exclude main branch
   workflow_dispatch:  # Allows manual triggering
 
 jobs:
