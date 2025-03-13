@@ -3,8 +3,8 @@ import os
 import json
 import requests
 import datetime
-from pillow_heif import register_heif_opener
 from PIL import Image
+from pillow_heif import register_heif_opener
 import io
 
 # Register HEIF opener with Pillow
@@ -26,6 +26,12 @@ def lambda_handler(event, context):
     
     extracted_text = ""
     
+    # Get the error bucket name from environment variables
+    error_bucket = os.environ.get("ERROR_BUCKET")
+    if not error_bucket:
+        print("ERROR_BUCKET environment variable not set, using default")
+        error_bucket = f"{bucket_name}-failed-ingestion"
+    
     # Convert HEIC/TIFF to JPG if needed
     if file_ext in ['heic', 'heif', 'tiff', 'tif']:
         try:
@@ -37,7 +43,6 @@ def lambda_handler(event, context):
                 raise Exception("Image conversion failed")
         except Exception as e:
             # Move failed file to error bucket
-            error_bucket = os.environ.get("ERROR_BUCKET", f"{bucket_name}-errors")
             error_key = f"failed_conversions/{object_key}"
             try:
                 s3_client.copy_object(
@@ -62,7 +67,6 @@ def lambda_handler(event, context):
         else:
             extracted_text = f"File type {file_ext} is not supported for extraction."
             # Move unsupported file to error bucket
-            error_bucket = os.environ.get("ERROR_BUCKET", f"{bucket_name}-errors")
             error_key = f"unsupported_files/{object_key}"
             try:
                 s3_client.copy_object(

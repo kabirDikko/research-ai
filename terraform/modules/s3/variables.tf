@@ -13,8 +13,9 @@ variable "lambda_function_name" {
   type        = string
 }
 
-variable "filter_prefix" {
-  description = "Prefix filter for bucket notifications"
-  type        = string
-  default     = "documents/"
+
+variable "failed_ingestion_retention_days" {
+  description = "Number of days to retain failed ingestion files before deletion"
+  type        = number
+  default     = 5
 }

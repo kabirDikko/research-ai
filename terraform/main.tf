@@ -1,4 +1,3 @@
-
 module "vpc" {
   source = "terraform-aws-modules/vpc/aws"
 
@@ -43,7 +42,7 @@ resource "aws_opensearchserverless_vpc_endpoint" "vpc_endpoint" {
 resource "aws_iam_role" "lambda_role" {
   name = "story-generator-lambda_role"
   assume_role_policy = jsonencode({
-    Version   = "2012-10-17",
+    Version = "2012-10-17",
     Statement = [{
       Effect    = "Allow",
       Principal = { Service = "lambda.amazonaws.com" },
@@ -57,12 +56,15 @@ resource "aws_iam_role_policy" "lambda_policy" {
   role = aws_iam_role.lambda_role.id
 
   policy = jsonencode({
-    Version   = "2012-10-17",
+    Version = "2012-10-17",
     Statement = [
       {
-        Effect   = "Allow",
-        Action   = ["s3:GetObject"],
-        Resource = "*"
+        Effect = "Allow",
+        Action = ["s3:GetObject", "s3:PutObject", "s3:CopyObject"],
+        Resource = [
+          "${module.s3.bucket_arn}/*",
+          "${module.s3.failed_ingestion_bucket_arn}/*"
+        ]
       },
       {
         Effect   = "Allow",
@@ -75,8 +77,8 @@ resource "aws_iam_role_policy" "lambda_policy" {
         Resource = "*"
       },
       {
-        Effect   = "Allow",
-        Action   = [
+        Effect = "Allow",
+        Action = [
           "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents"
@@ -88,33 +90,34 @@ resource "aws_iam_role_policy" "lambda_policy" {
 }
 
 module "s3" {
-  source              = "./modules/s3"
-  bucket_name         = var.s3_bucket_name
-  lambda_function_arn = module.lambda.ingest_function_arn
-  lambda_function_name= module.lambda.ingest_function_name
-  filter_prefix       = "documents/"
+  source               = "./modules/s3"
+  bucket_name          = var.s3_bucket_name
+  lambda_function_arn  = module.lambda.ingest_function_arn
+  lambda_function_name = module.lambda.ingest_function_name
+
 }
 
 module "opensearch" {
-  source             = "./modules/opensearch"
-  collection_name    = "story-documents"
-  vpc_endpoint_id    = aws_opensearchserverless_vpc_endpoint.vpc_endpoint.id
+  source          = "./modules/opensearch"
+  collection_name = "story-documents"
+  vpc_endpoint_id = aws_opensearchserverless_vpc_endpoint.vpc_endpoint.id
 }
 
 module "lambda" {
-  source                  = "./modules/lambda"
-  ingest_function_name    = "ingest-function"
-  query_function_name     = "query-function"
-  ingest_handler          = "ingest.lambda_handler"
-  query_handler           = "query.lambda_handler"
-  runtime                 = "python3.9"
-  lambda_role_arn         = aws_iam_role.lambda_role.arn
-  ingest_zip_file         = var.ingest_zip_file
-  query_zip_file          = var.query_zip_file
-  ingest_env_vars         = {
+  source                       = "./modules/lambda"
+  ingest_function_name         = "ingest-function"
+  query_function_name          = "query-function"
+  ingest_handler               = "ingest.lambda_handler"
+  query_handler                = "query.lambda_handler"
+  runtime                      = "python3.9"
+  lambda_role_arn              = aws_iam_role.lambda_role.arn
+  ingest_zip_file              = var.ingest_zip_file
+  query_zip_file               = var.query_zip_file
+  failed_ingestion_bucket_name = module.s3.failed_ingestion_bucket_name
+  ingest_env_vars = {
     OPENSEARCH_ENDPOINT = module.opensearch.collection_endpoint
   }
-  query_env_vars          = {
+  query_env_vars = {
     OPENSEARCH_ENDPOINT = module.opensearch.collection_endpoint,
     BEDROCK_ENDPOINT    = module.bedrock.bedrock_endpoint
   }
