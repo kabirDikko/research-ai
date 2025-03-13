@@ -1,4 +1,5 @@
 name: Terraform Apply
+
 on:
   workflow_run:
     workflows: ["LambdaZip + Terraform Plan"]

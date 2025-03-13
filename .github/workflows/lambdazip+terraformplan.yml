@@ -57,9 +57,22 @@ jobs:
           terraform init
           terraform plan -var-file=terraform.tfvars -out=tfplan
     
-          
-      - uses: actions/upload-artifact@v4
+      - name: Upload Terraform Plan
+        uses: actions/upload-artifact@v4
         with:
           name: tfplan
           path: ./terraform/
           if-no-files-found: error
+
+  create-pr:
+    needs: [zip-lambda-functions, terraform]
+    runs-on: ubuntu-latest
+    if: ${{ github.ref != 'refs/heads/main' }}
+    steps:
+      - name: Create Pull Request to main
+        uses: peter-evans/create-pull-request@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          title: "Auto PR: Merge changes from ${{ github.ref_name }}"
+          body: "This PR is automatically generated after a successful Terraform Plan run to merge changes into main."
+          base: main
