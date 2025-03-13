@@ -39,6 +39,11 @@ variable "query_zip_file" {
   type        = string
 }
 
+variable "failed_ingestion_bucket_name" {
+  description = "Name of the bucket to store failed ingestion files"
+  type        = string
+}
+
 variable "ingest_env_vars" {
   description = "Environment variables for ingest Lambda"
   type        = map(string)
