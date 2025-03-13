@@ -1,20 +1,17 @@
 name: Terraform Apply
 
 on:
-  workflow_run:
-    workflows: ["LambdaZip + Terraform Plan"]
-    types:
-      - completed
+  push:
     branches:
-      - main
+      - main  # Only trigger on main branch
+  workflow_dispatch:  # Allow manual triggering
 
 jobs:
   terraform-apply:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -28,35 +25,19 @@ jobs:
         with:
           terraform_version: 1.11.1
 
-      - name: Download Terraform Plan
-        uses: actions/github-script@v6
+      - name: Run LambdaZip + Terraform Plan
+        uses: ./.github/workflows/lambdazip+terraformplan.yml
         with:
-          script: |
-            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: context.payload.workflow_run.id
-            });
-            const matchArtifact = artifacts.data.artifacts.find((artifact) => artifact.name === "tfplan");
-            if (!matchArtifact) {
-              throw new Error('No tfplan artifact found.');
-            }
-            const download = await github.rest.actions.downloadArtifact({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              artifact_id: matchArtifact.id,
-              archive_format: 'zip'
-            });
-            const fs = require('fs');
-            fs.writeFileSync('tfplan.zip', Buffer.from(download.data));
-
-      - name: Extract Terraform Plan
-        run: |
-          unzip tfplan.zip
-          rm tfplan.zip
+          ref: ${{ github.sha }}
+        
+      - name: Download Terraform Plan Artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: tfplan
+          path: ./terraform/
 
       - name: Terraform Apply
         working-directory: ./terraform
         run: |
           terraform init
-          terraform apply tfplan
+          terraform apply -auto-approve tfplan
