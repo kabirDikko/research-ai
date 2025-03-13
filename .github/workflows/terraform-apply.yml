@@ -29,11 +29,28 @@ jobs:
         uses: hashicorp/setup-terraform@v1
         with:
           terraform_version: 1.11.1
-          
-      - name: Find latest workflow run with artifact
-        id: find-artifact
+      
+      - name: Initialize Terraform
+        working-directory: ./terraform
+        run: terraform init
+      
+      - name: Check if this is a workflow rerun
+        id: check-rerun
+        run: |
+          if [[ "${{ github.run_attempt }}" -gt 1 ]]; then
+            echo "This is a rerun of a failed workflow"
+            echo "is_rerun=true" >> $GITHUB_OUTPUT
+          else
+            echo "This is the first attempt"
+            echo "is_rerun=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Try to download and use existing plan
+        if: steps.check-rerun.outputs.is_rerun != 'true'
+        id: download-plan
         env:
           GH_TOKEN: ${{ github.token }}
+        continue-on-error: true
         run: |
           # Install GitHub CLI
           curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
@@ -48,26 +65,29 @@ jobs:
             | head -n 1)
           
           if [ -z "$ARTIFACT_URL" ]; then
-            echo "No tfplan artifact found. Unable to proceed with terraform apply."
-            exit 1
+            echo "No tfplan artifact found. Will create a new plan."
+            echo "has_plan=false" >> $GITHUB_OUTPUT
+            exit 0
           else
             echo "Found artifact URL: $ARTIFACT_URL"
-            echo "artifact_url=$ARTIFACT_URL" >> $GITHUB_OUTPUT
+            mkdir -p terraform
+            curl -L -H "Authorization: token ${{ github.token }}" \
+                 -H "Accept: application/vnd.github+json" \
+                 "$ARTIFACT_URL" \
+                 -o terraform/tfplan.zip
+            cd terraform && unzip tfplan.zip && rm tfplan.zip
+            echo "has_plan=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Download Terraform Plan Artifact
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Create new Terraform plan
+        if: steps.check-rerun.outputs.is_rerun == 'true' || steps.download-plan.outputs.has_plan != 'true'
+        working-directory: ./terraform
         run: |
-          mkdir -p terraform
-          curl -L -H "Authorization: token ${{ github.token }}" \
-               -H "Accept: application/vnd.github+json" \
-               "${{ steps.find-artifact.outputs.artifact_url }}" \
-               -o terraform/tfplan.zip
-          cd terraform && unzip tfplan.zip && rm tfplan.zip
+          echo "Creating a fresh Terraform plan based on current state"
+          terraform plan -var-file=terraform.tfvars -out=tfplan
 
       - name: Terraform Apply
         working-directory: ./terraform
         run: |
-          terraform init
+          echo "Applying Terraform changes"
           terraform apply -auto-approve tfplan
