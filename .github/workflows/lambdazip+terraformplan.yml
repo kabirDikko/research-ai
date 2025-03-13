@@ -11,10 +11,6 @@ on:
       - '*'  # Trigger on any branch
   workflow_dispatch:  # Allows manual triggering
 
-permissions:
-  contents: write
-  pull-requests: write
-
 jobs:
   zip-lambda-functions:
     runs-on: ubuntu-latest
@@ -70,35 +66,3 @@ jobs:
           name: tfplan
           path: ./terraform/tfplan
           if-no-files-found: error
-    
-  check-pr:
-    runs-on: ubuntu-latest
-    needs: terraform-plan
-    if: github.ref != 'refs/heads/main' && success()
-    steps:
-      - name: Check for existing PR
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Extract branch name from ref
-          BRANCH_NAME=$(echo ${{ github.ref }} | sed 's/refs\/heads\///')
-          echo "Current branch: $BRANCH_NAME"
-          
-          # Check for existing PRs from this branch to main
-          PR_URL=$(gh pr list --head $BRANCH_NAME --base main --json url -q '.[0].url')
-          
-          if [ -n "$PR_URL" ]; then
-            echo "Existing PR found: $PR_URL"
-            echo "PR_URL=$PR_URL" >> $GITHUB_ENV
-          else
-            echo "No existing PR found from $BRANCH_NAME to main"
-            echo "PR_URL=none" >> $GITHUB_ENV
-          fi
-
-      - name: Output PR link
-        run: |
-          if [ "${{ env.PR_URL }}" != "none" ]; then
-            echo "::notice::PR ready for review: ${{ env.PR_URL }}"
-          else
-            echo "::notice::No PR exists. Create a PR from this branch to main to trigger terraform apply when merged."
-          fi
