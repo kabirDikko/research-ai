@@ -2,4 +2,4 @@
 requests==2.28.2
 boto3==1.33.1
 pillow_heif==0.21.0
-# PIL is provided by the Lambda layer
+
