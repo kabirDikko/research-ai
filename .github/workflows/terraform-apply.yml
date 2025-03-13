@@ -6,6 +6,11 @@ on:
       - main  # Only trigger on main branch
   workflow_dispatch:  # Allow manual triggering
 
+permissions:
+  contents: read
+  actions: read
+  id-token: write  # Needed for AWS credential provider
+
 jobs:
   terraform-apply:
     runs-on: ubuntu-latest
@@ -24,17 +29,42 @@ jobs:
         uses: hashicorp/setup-terraform@v1
         with:
           terraform_version: 1.11.1
+          
+      - name: Find latest workflow run with artifact
+        id: find-artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Install GitHub CLI
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          sudo apt update
+          sudo apt install gh
+          
+          # Find the latest successful run of the terraform plan workflow with an artifact
+          ARTIFACT_URL=$(gh api repos/${{ github.repository }}/actions/artifacts \
+            --jq '.artifacts[] | select(.name=="tfplan" and .expired==false) | .archive_download_url' \
+            --header "Accept: application/vnd.github+json" \
+            | head -n 1)
+          
+          if [ -z "$ARTIFACT_URL" ]; then
+            echo "No tfplan artifact found. Unable to proceed with terraform apply."
+            exit 1
+          else
+            echo "Found artifact URL: $ARTIFACT_URL"
+            echo "artifact_url=$ARTIFACT_URL" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Run LambdaZip + Terraform Plan
-        uses: ./.github/workflows/lambdazip+terraformplan.yml
-        with:
-          ref: ${{ github.sha }}
-        
       - name: Download Terraform Plan Artifact
-        uses: actions/download-artifact@v3
-        with:
-          name: tfplan
-          path: ./terraform/
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p terraform
+          curl -L -H "Authorization: token ${{ github.token }}" \
+               -H "Accept: application/vnd.github+json" \
+               "${{ steps.find-artifact.outputs.artifact_url }}" \
+               -o terraform/tfplan.zip
+          cd terraform && unzip tfplan.zip && rm tfplan.zip
 
       - name: Terraform Apply
         working-directory: ./terraform
