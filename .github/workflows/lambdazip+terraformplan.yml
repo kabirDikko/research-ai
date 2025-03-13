@@ -76,3 +76,5 @@ jobs:
           title: "Auto PR: Merge changes from ${{ github.ref_name }}"
           body: "This PR is automatically generated after a successful Terraform Plan run to merge changes into main."
           base: main
+          branch: ${{ github.ref_name }}-auto-pr
+          repository: ${{ github.repository }}
