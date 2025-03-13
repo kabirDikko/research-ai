@@ -57,8 +57,8 @@ jobs:
           terraform init
           terraform plan -var-file=terraform.tfvars -out=tfplan
     
-          
-      - uses: actions/upload-artifact@v4
+      - name: Upload Terraform Plan
+        uses: actions/upload-artifact@v4
         with:
           name: tfplan
           path: ./terraform/
