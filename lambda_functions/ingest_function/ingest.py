@@ -3,12 +3,46 @@ import os
 import json
 import requests
 import datetime
-from PIL import Image
-from pillow_heif import register_heif_opener
 import io
+import sys
+
+# Print Python path for debugging
+print(f"Python path before modification: {sys.path}")
+
+# Add the Lambda layer path to sys.path to ensure we use the layer version of PIL
+sys.path.insert(0, '/opt/python')
+
+# Print Python path after modification for debugging
+print(f"Python path after modification: {sys.path}")
+
+# Print available modules in /opt/python
+try:
+    print(f"Contents of /opt/python: {os.listdir('/opt/python')}")
+except Exception as e:
+    print(f"Error listing /opt/python: {str(e)}")
+
+# Now import PIL from the Lambda layer
+try:
+    from PIL import Image
+    print(f"Successfully imported PIL from {Image.__file__}")
+except Exception as e:
+    print(f"Error importing PIL: {str(e)}")
+    raise
+
+try:
+    from pillow_heif import register_heif_opener
+    print(f"Successfully imported pillow_heif")
+except Exception as e:
+    print(f"Error importing pillow_heif: {str(e)}")
+    raise
 
 # Register HEIF opener with Pillow
-register_heif_opener()
+try:
+    register_heif_opener()
+    print("Successfully registered HEIF opener")
+except Exception as e:
+    print(f"Error registering HEIF opener: {str(e)}")
+    raise
 
 def lambda_handler(event, context):
     # Extract bucket and object details from the S3 event

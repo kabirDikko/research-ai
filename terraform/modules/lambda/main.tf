@@ -5,8 +5,8 @@ resource "aws_lambda_function" "ingest" {
   role             = var.lambda_role_arn
   filename         = var.ingest_zip_file
   source_code_hash = filebase64sha256(var.ingest_zip_file)
-  timeout          = 30  # Increase timeout for image processing
-  memory_size      = 512 # Increase memory for image processing
+  timeout          = 60   # Increase timeout for image processing
+  memory_size      = 1024 # Increase memory for image processing
 
   # Add the Pillow Lambda layer
   layers = [
@@ -15,7 +15,8 @@ resource "aws_lambda_function" "ingest" {
 
   environment {
     variables = merge(var.ingest_env_vars, {
-      ERROR_BUCKET = var.failed_ingestion_bucket_name
+      ERROR_BUCKET = var.failed_ingestion_bucket_name,
+      PYTHONPATH   = "/opt/python:/var/task" # Ensure Python can find modules in the Lambda layer
     })
   }
 
