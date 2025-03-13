@@ -8,6 +8,18 @@ resource "aws_lambda_function" "ingest" {
   environment {
     variables = var.ingest_env_vars
   }
+
+  # Enable basic CloudWatch logging
+  tracing_config {
+    mode = "PassThrough"
+  }
+  
+  depends_on = [aws_cloudwatch_log_group.ingest_logs]
+}
+
+resource "aws_cloudwatch_log_group" "ingest_logs" {
+  name              = "/aws/lambda/${var.ingest_function_name}"
+  retention_in_days = 1 # Minimum retention period
 }
 
 resource "aws_lambda_function" "query" {
@@ -20,4 +32,16 @@ resource "aws_lambda_function" "query" {
   environment {
     variables = var.query_env_vars
   }
+
+  # Enable basic CloudWatch logging
+  tracing_config {
+    mode = "PassThrough"
+  }
+
+  depends_on = [aws_cloudwatch_log_group.query_logs]
+}
+
+resource "aws_cloudwatch_log_group" "query_logs" {
+  name              = "/aws/lambda/${var.query_function_name}"
+  retention_in_days = 1 # Minimum retention period
 }
