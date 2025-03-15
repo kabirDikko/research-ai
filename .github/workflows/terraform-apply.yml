@@ -59,10 +59,36 @@ jobs:
       # ------------------------------
       # Phase 2: Serverless Lambda Deployment
       # ------------------------------
-      - name: Serverless Deploy
-        uses: serverless/serverless@v3
+      # Set up Python for Lambda functions
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          args: deploy
+          python-version: '3.9'
+          
+      # Set up Node.js for Serverless Framework
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+          
+      # Install Serverless Framework globally
+      - name: Install Serverless Framework
+        run: npm install -g serverless
+        
+      # Install Python dependencies
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          
+      # Install Serverless plugins if needed
+      - name: Install Serverless plugins
+        run: |
+          if [ -f package.json ]; then npm ci; fi
+          
+      # Serverless Deploy
+      - name: Serverless Deploy
+        run: serverless deploy
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
