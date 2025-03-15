@@ -94,9 +94,6 @@ resource "aws_iam_role_policy" "lambda_policy" {
 module "s3" {
   source               = "./modules/s3"
   bucket_name          = var.s3_bucket_name
-  lambda_function_arn  = module.lambda.ingest_function_arn
-  lambda_function_name = module.lambda.ingest_function_name
-
 }
 
 module "opensearch" {

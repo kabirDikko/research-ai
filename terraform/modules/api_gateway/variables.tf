@@ -17,6 +17,7 @@ variable "resource_path" {
 variable "lambda_invoke_arn" {
   description = "Lambda function invoke ARN for integration"
   type        = string
+  default     = null
 }
 
 variable "stage_name" {
