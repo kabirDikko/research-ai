@@ -113,7 +113,7 @@ module "api_gateway" {
   api_name          = "story-generator-api"
   api_description   = "API for story generation"
   resource_path     = "query"
-  lambda_invoke_arn = module.lambda.query_lambda_invoke_arn
+  lambda_invoke_arn = var.lambda_invoke_arn
   stage_name        = "prod"
 }
 

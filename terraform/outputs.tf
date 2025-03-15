@@ -17,7 +17,7 @@ output "lambda_role_arn" {
 }
 
 output "ingestion_bucket_name" {
-  value = module.s3.ingestion_bucket_name
+  value = module.s3.bucket_name
 }
 
 output "failed_ingestion_bucket_name" {
