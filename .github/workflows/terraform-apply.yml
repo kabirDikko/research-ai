@@ -1,4 +1,4 @@
-name: Terraform Apply
+name: Terraform Apply & Serverless Deploy
 
 on:
   push:
@@ -9,15 +9,17 @@ on:
 permissions:
   contents: read
   actions: read
-  id-token: write  # Needed for AWS credential provider
+  id-token: write
 
 jobs:
-  terraform-apply:
+  deploy:
     runs-on: ubuntu-latest
     steps:
+      # Checkout the repository
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      # Configure AWS credentials
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -25,69 +27,60 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
+      # Set up Terraform CLI
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v1
         with:
           terraform_version: 1.11.1
       
+      # Initialize Terraform
       - name: Initialize Terraform
         working-directory: ./terraform
         run: terraform init
       
-      - name: Check if this is a workflow rerun
-        id: check-rerun
+      # ------------------------------
+      # Phase 1: Infrastructure Deployment
+      # ------------------------------
+      - name: Terraform Apply (Phase 1: Infrastructure)
+        working-directory: ./terraform
+        run: terraform apply -auto-approve
+        # Note: Your Terraform code should be written so that API Gateway integration resources
+        # (that depend on the Lambda ARN) are conditionally created (e.g. count = var.ingest_lambda_function_arn == "" ? 0 : 1)
+      
+      # Export Terraform outputs for Serverless use
+      - name: Export Terraform Outputs
+        working-directory: ./terraform
         run: |
-          if [[ "${{ github.run_attempt }}" -gt 1 ]]; then
-            echo "This is a rerun of a failed workflow"
-            echo "is_rerun=true" >> $GITHUB_OUTPUT
-          else
-            echo "This is the first attempt"
-            echo "is_rerun=false" >> $GITHUB_OUTPUT
-          fi
+          echo "INGESTION_BUCKET=$(terraform output -raw source_bucket)" >> $GITHUB_ENV
+          echo "FAILED_INGESTION_BUCKET=$(terraform output -raw failed_ingestion_bucket)" >> $GITHUB_ENV
+          echo "OPENSEARCH_ENDPOINT=$(terraform output -raw opensearch_endpoint)" >> $GITHUB_ENV
+          echo "MY_LAMBDA_ROLE_ARN=$(terraform output -raw lambda_role_arn)" >> $GITHUB_ENV
 
-      - name: Try to download and use existing plan
-        if: steps.check-rerun.outputs.is_rerun != 'true'
-        id: download-plan
+      # ------------------------------
+      # Phase 2: Serverless Lambda Deployment
+      # ------------------------------
+      - name: Serverless Deploy
+        uses: serverless/serverless@v3
+        with:
+          args: deploy
         env:
-          GH_TOKEN: ${{ github.token }}
-        continue-on-error: true
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
+          MY_LAMBDA_ROLE_ARN: ${{ env.MY_LAMBDA_ROLE_ARN }}
+          INGESTION_BUCKET: ${{ env.INGESTION_BUCKET }}
+          FAILED_INGESTION_BUCKET: ${{ env.FAILED_INGESTION_BUCKET }}
+          OPENSEARCH_ENDPOINT: ${{ env.OPENSEARCH_ENDPOINT }}
+      
+      # ------------------------------
+      # Phase 3: Update API Gateway Integration in Terraform
+      # ------------------------------
+      - name: Get Lambda ARN for Ingest Function
+        id: get_lambda_arn
         run: |
-          # Install GitHub CLI
-          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-          sudo apt update
-          sudo apt install gh
-          
-          # Find the latest successful run of the terraform plan workflow with an artifact
-          ARTIFACT_URL=$(gh api repos/${{ github.repository }}/actions/artifacts \
-            --jq '.artifacts[] | select(.name=="tfplan" and .expired==false) | .archive_download_url' \
-            --header "Accept: application/vnd.github+json" \
-            | head -n 1)
-          
-          if [ -z "$ARTIFACT_URL" ]; then
-            echo "No tfplan artifact found. Will create a new plan."
-            echo "has_plan=false" >> $GITHUB_OUTPUT
-            exit 0
-          else
-            echo "Found artifact URL: $ARTIFACT_URL"
-            mkdir -p terraform
-            curl -L -H "Authorization: token ${{ github.token }}" \
-                 -H "Accept: application/vnd.github+json" \
-                 "$ARTIFACT_URL" \
-                 -o terraform/tfplan.zip
-            cd terraform && unzip tfplan.zip && rm tfplan.zip
-            echo "has_plan=true" >> $GITHUB_OUTPUT
-          fi
+          INGEST_LAMBDA_ARN=$(aws lambda get-function --function-name ingest-function --query 'Configuration.FunctionArn' --output text)
+          echo "INGEST_LAMBDA_ARN=${INGEST_LAMBDA_ARN}" >> $GITHUB_ENV
 
-      - name: Create new Terraform plan
-        if: steps.check-rerun.outputs.is_rerun == 'true' || steps.download-plan.outputs.has_plan != 'true'
+      - name: Terraform Apply (Phase 3: API Gateway Integration)
         working-directory: ./terraform
-        run: |
-          echo "Creating a fresh Terraform plan based on current state"
-          terraform plan -var-file=terraform.tfvars -out=tfplan
-
-      - name: Terraform Apply
-        working-directory: ./terraform
-        run: |
-          echo "Applying Terraform changes"
-          terraform apply -auto-approve tfplan
+        run: terraform apply -auto-approve -var "ingest_lambda_function_arn=${{ env.INGEST_LAMBDA_ARN }}"

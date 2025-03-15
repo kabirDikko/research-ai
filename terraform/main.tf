@@ -89,12 +89,11 @@ resource "aws_iam_role_policy" "lambda_policy" {
   })
 }
 
+
+
 module "s3" {
   source               = "./modules/s3"
   bucket_name          = var.s3_bucket_name
-  lambda_function_arn  = module.lambda.ingest_function_arn
-  lambda_function_name = module.lambda.ingest_function_name
-
 }
 
 module "opensearch" {
@@ -103,25 +102,6 @@ module "opensearch" {
   vpc_endpoint_id = aws_opensearchserverless_vpc_endpoint.vpc_endpoint.id
 }
 
-module "lambda" {
-  source                       = "./modules/lambda"
-  ingest_function_name         = "ingest-function"
-  query_function_name          = "query-function"
-  ingest_handler               = "ingest.lambda_handler"
-  query_handler                = "query.lambda_handler"
-  runtime                      = "python3.9"
-  lambda_role_arn              = aws_iam_role.lambda_role.arn
-  ingest_zip_file              = var.ingest_zip_file
-  query_zip_file               = var.query_zip_file
-  failed_ingestion_bucket_name = module.s3.failed_ingestion_bucket_name
-  ingest_env_vars = {
-    OPENSEARCH_ENDPOINT = module.opensearch.collection_endpoint
-  }
-  query_env_vars = {
-    OPENSEARCH_ENDPOINT = module.opensearch.collection_endpoint,
-    BEDROCK_ENDPOINT    = module.bedrock.bedrock_endpoint
-  }
-}
 
 module "bedrock" {
   source               = "./modules/bedrock"
@@ -133,6 +113,9 @@ module "api_gateway" {
   api_name          = "story-generator-api"
   api_description   = "API for story generation"
   resource_path     = "query"
-  lambda_invoke_arn = module.lambda.query_lambda_invoke_arn
+  lambda_invoke_arn = var.lambda_invoke_arn
   stage_name        = "prod"
 }
+
+
+

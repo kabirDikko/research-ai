@@ -17,6 +17,7 @@ resource "aws_api_gateway_method" "post_method" {
 }
 
 resource "aws_api_gateway_integration" "lambda_integration" {
+  count = var.lambda_invoke_arn != null ? 1 : 0
   rest_api_id             = aws_api_gateway_rest_api.this.id
   resource_id             = aws_api_gateway_resource.query_resource.id
   http_method             = aws_api_gateway_method.post_method.http_method

@@ -1,0 +1,36 @@
+service: lambda-services
+
+provider:
+  name: aws
+  runtime: python3.9
+  stage: dev
+  region: us-east-1
+  role: ${env:MY_LAMBDA_ROLE_ARN}
+  environment:
+    OPENSEARCH_ENDPOINT: ${env:OPENSEARCH_ENDPOINT}
+
+plugins:
+  - serverless-python-requirements
+
+custom:
+  pythonRequirements:
+    dockerizePip: true
+
+functions:
+  ingest:
+    name: ingest-function
+    handler: lambda_functions/image_conversion_service/ingest.lambda_handler
+    events:
+      - s3:
+          bucket: ${env:INGESTION_BUCKET}    # This bucket is created by Terraform
+          event: s3:ObjectCreated:*
+    environment:
+      OPENSEARCH_ENDPOINT: ${env:OPENSEARCH_ENDPOINT}
+      INGESTION_BUCKET: ${env:INGESTION_BUCKET}
+      FAILED_INGESTION_BUCKET: ${env:FAILED_INGESTION_BUCKET}
+  query:
+    name: query-function
+    handler: lambda_functions/query_function/query.lambda_handler
+    environment:
+      OPENSEARCH_ENDPOINT: ${env:OPENSEARCH_ENDPOINT}
+      BEDROCK_ENDPOINT: ${env:BEDROCK_ENDPOINT}

@@ -1,16 +1,20 @@
 output "bucket_name" {
-  value = aws_s3_bucket.this.bucket
+  description = "Name of the main S3 bucket"
+  value       = aws_s3_bucket.this.id
 }
 
 output "bucket_arn" {
-  value = aws_s3_bucket.this.arn
+  description = "ARN of the main S3 bucket"
+  value       = aws_s3_bucket.this.arn
 }
 
 output "failed_ingestion_bucket_name" {
-  value = aws_s3_bucket.failed_ingestion.bucket
+  description = "Name of the failed ingestion S3 bucket"
+  value       = aws_s3_bucket.failed_ingestion.id
 }
 
 output "failed_ingestion_bucket_arn" {
-  value = aws_s3_bucket.failed_ingestion.arn
+  description = "ARN of the failed ingestion S3 bucket"
+  value       = aws_s3_bucket.failed_ingestion.arn
 }
 
