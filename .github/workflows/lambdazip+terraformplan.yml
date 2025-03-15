@@ -1,4 +1,4 @@
-name: LambdaZip + Terraform Plan
+name: Terraform Plan
 
 on:
   push:
@@ -8,32 +8,9 @@ on:
   workflow_dispatch:  # Allows manual triggering
 
 jobs:
-  zip-lambda-functions:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-          
-      - name: Install dependencies and zip ingest function
-        run: |
-          cd lambda_functions/ingest_function
-          pip install -r requirements.txt -t .
-          zip -r ../../ingest_function.zip .
-          
-      - name: Install dependencies and zip query function  
-        run: |
-          cd lambda_functions/query_function
-          pip install -r requirements.txt -t .
-          zip -r ../../query_function.zip .
-        
+
   terraform-plan:
     runs-on: ubuntu-latest
-    needs: zip-lambda-functions
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
