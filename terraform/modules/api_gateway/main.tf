@@ -17,7 +17,7 @@ resource "aws_api_gateway_method" "post_method" {
 }
 
 resource "aws_api_gateway_integration" "lambda_integration" {
-  count = var.lambda_invoke_arn != null ? 1 : 0
+  count                   = var.lambda_invoke_arn != null ? 1 : 0
   rest_api_id             = aws_api_gateway_rest_api.this.id
   resource_id             = aws_api_gateway_resource.query_resource.id
   http_method             = aws_api_gateway_method.post_method.http_method
@@ -27,8 +27,21 @@ resource "aws_api_gateway_integration" "lambda_integration" {
 }
 
 resource "aws_api_gateway_deployment" "this" {
-  depends_on  = [aws_api_gateway_integration.lambda_integration]
+  depends_on  = [aws_api_gateway_integration.lambda_integration[0]]
   rest_api_id = aws_api_gateway_rest_api.this.id
+  
+  # Force a new deployment when configuration changes
+  triggers = {
+    redeployment = sha1(jsonencode([
+      aws_api_gateway_resource.query_resource.id,
+      aws_api_gateway_method.post_method.id,
+      var.lambda_invoke_arn != null ? aws_api_gateway_integration.lambda_integration[0].id : "none"
+    ]))
+  }
+  
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_api_gateway_stage" "this" {
