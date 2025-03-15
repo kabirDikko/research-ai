@@ -41,7 +41,7 @@ jobs:
       # ------------------------------
       # Phase 1: Infrastructure Deployment
       # ------------------------------
-      - name: Terraform Apply (Phase 1: Infrastructure)
+      - name: Terraform Apply (Phase 1 - Infrastructure)
         working-directory: ./terraform
         run: terraform apply -auto-approve
         # Note: Your Terraform code should be written so that API Gateway integration resources
@@ -51,11 +51,11 @@ jobs:
       - name: Export Terraform Outputs
         working-directory: ./terraform
         run: |
-          echo "INGESTION_BUCKET=$(terraform output -raw source_bucket)" >> $GITHUB_ENV
+          echo "INGESTION_BUCKET=$(terraform output -raw bucket_name)" >> $GITHUB_ENV
           echo "FAILED_INGESTION_BUCKET=$(terraform output -raw failed_ingestion_bucket)" >> $GITHUB_ENV
           echo "OPENSEARCH_ENDPOINT=$(terraform output -raw opensearch_endpoint)" >> $GITHUB_ENV
           echo "MY_LAMBDA_ROLE_ARN=$(terraform output -raw lambda_role_arn)" >> $GITHUB_ENV
-
+          echo "LAMBDA_INVOKE_ARN=$(terraform output -raw lambda_invoke_arn)" >> $GITHUB_ENV
       # ------------------------------
       # Phase 2: Serverless Lambda Deployment
       # ------------------------------
@@ -81,6 +81,6 @@ jobs:
           INGEST_LAMBDA_ARN=$(aws lambda get-function --function-name ingest-function --query 'Configuration.FunctionArn' --output text)
           echo "INGEST_LAMBDA_ARN=${INGEST_LAMBDA_ARN}" >> $GITHUB_ENV
 
-      - name: Terraform Apply (Phase 3: API Gateway Integration)
+      - name: Terraform Apply (Phase 3 - API Gateway Integration)
         working-directory: ./terraform
-        run: terraform apply -auto-approve -var "ingest_lambda_function_arn=${{ env.INGEST_LAMBDA_ARN }}"
+        run: terraform apply -auto-approve -var "lambda_invoke_arn=${{ env.LAMBDA_INVOKE_ARN }}"
