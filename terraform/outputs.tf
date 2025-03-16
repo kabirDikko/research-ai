@@ -2,7 +2,6 @@ output "s3_bucket_name" {
   value = module.s3.bucket_name
 }
 
-
 output "opensearch_domain_endpoint" {
   value = module.opensearch.collection_endpoint
 }
