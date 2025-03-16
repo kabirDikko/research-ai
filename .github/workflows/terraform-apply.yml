@@ -44,24 +44,85 @@ jobs:
       - name: Terraform Apply (Phase 1 - Base Infrastructure)
         working-directory: ./terraform
         run: terraform apply -auto-approve -var "lambda_invoke_arn="
-        # This will create the API Gateway but without Lambda integration
       
-      # Export Terraform outputs for Serverless use
-      - name: Export Terraform Outputs
+      # Check Terraform outputs format before using them
+      - name: Examine Terraform Output Format
         working-directory: ./terraform
         run: |
-          echo "INGESTION_BUCKET=$(terraform output -raw s3_bucket_name)" >> $GITHUB_ENV
-          echo "FAILED_INGESTION_BUCKET=$(terraform output -raw failed_ingestion_bucket)" >> $GITHUB_ENV
-          echo "OPENSEARCH_ENDPOINT=$(terraform output -raw opensearch_domain_endpoint)" >> $GITHUB_ENV
-          echo "LAMBDA_ROLE_ARN=$(terraform output -raw lambda_role_arn)" >> $GITHUB_ENV
-
-      - name: Debug environment variables
+          echo "Raw terraform output:"
+          terraform output || echo "No outputs found"
+          
+          echo "JSON terraform output:"
+          terraform output -json || echo "JSON output failed"
+      
+      # Export Terraform outputs with improved error handling
+      - name: Export Terraform Outputs Safely
+        working-directory: ./terraform
         run: |
-          echo "INGESTION_BUCKET=$INGESTION_BUCKET"
-          echo "FAILED_INGESTION_BUCKET=$FAILED_INGESTION_BUCKET"
-          echo "OPENSEARCH_ENDPOINT=$OPENSEARCH_ENDPOINT"
-          echo "LAMBDA_ROLE_ARN=$LAMBDA_ROLE_ARN"
-            
+          # Store outputs in files to avoid issues with special characters
+          terraform output s3_bucket_name > bucket_name.txt || echo "research-ingestion-bucket-default" > bucket_name.txt
+          terraform output failed_ingestion_bucket > failed_bucket.txt || echo "research-failed-ingestion-bucket-default" > failed_bucket.txt
+          terraform output opensearch_domain_endpoint > opensearch.txt || echo "search-domain.us-east-1.es.amazonaws.com" > opensearch.txt
+          terraform output lambda_role_arn > lambda_role.txt || echo "arn:aws:iam::123456789012:role/lambda-role-default" > lambda_role.txt
+          
+          # Trim whitespace and set env vars
+          INGESTION_BUCKET=$(cat bucket_name.txt | tr -d '"' | xargs)
+          FAILED_INGESTION_BUCKET=$(cat failed_bucket.txt | tr -d '"' | xargs)
+          OPENSEARCH_ENDPOINT=$(cat opensearch.txt | tr -d '"' | xargs)
+          LAMBDA_ROLE_ARN=$(cat lambda_role.txt | tr -d '"' | xargs)
+          
+          # Set GitHub environment variables
+          echo "INGESTION_BUCKET=${INGESTION_BUCKET}" >> $GITHUB_ENV
+          echo "FAILED_INGESTION_BUCKET=${FAILED_INGESTION_BUCKET}" >> $GITHUB_ENV
+          echo "OPENSEARCH_ENDPOINT=${OPENSEARCH_ENDPOINT}" >> $GITHUB_ENV
+          echo "LAMBDA_ROLE_ARN=${LAMBDA_ROLE_ARN}" >> $GITHUB_ENV
+          
+          # Debug what we actually stored
+          echo "Values saved:"
+          echo "INGESTION_BUCKET: ${INGESTION_BUCKET}"
+          echo "FAILED_INGESTION_BUCKET: ${FAILED_INGESTION_BUCKET}"
+          echo "OPENSEARCH_ENDPOINT: ${OPENSEARCH_ENDPOINT}"
+          echo "LAMBDA_ROLE_ARN: ${LAMBDA_ROLE_ARN}"
+      
+      # Fallback to AWS CLI lookups if Terraform outputs fail
+      - name: Fallback Resource Lookup with AWS CLI
+        run: |
+          # Only run lookups if the previous step didn't set valid values
+          if [ -z "${{ env.INGESTION_BUCKET }}" ] || [ "${{ env.INGESTION_BUCKET }}" = "research-ingestion-bucket-default" ]; then
+            echo "Looking up ingestion bucket with AWS CLI..."
+            INGESTION_BUCKET=$(aws s3api list-buckets --query "Buckets[?contains(Name, 'ingestion')].Name" --output text | head -n 1)
+            echo "INGESTION_BUCKET=${INGESTION_BUCKET}" >> $GITHUB_ENV
+          fi
+          
+          if [ -z "${{ env.FAILED_INGESTION_BUCKET }}" ] || [ "${{ env.FAILED_INGESTION_BUCKET }}" = "research-failed-ingestion-bucket-default" ]; then
+            echo "Looking up failed ingestion bucket with AWS CLI..."
+            FAILED_INGESTION_BUCKET=$(aws s3api list-buckets --query "Buckets[?contains(Name, 'fail')].Name" --output text | head -n 1)
+            echo "FAILED_INGESTION_BUCKET=${FAILED_INGESTION_BUCKET}" >> $GITHUB_ENV
+          fi
+          
+          if [ -z "${{ env.OPENSEARCH_ENDPOINT }}" ] || [ "${{ env.OPENSEARCH_ENDPOINT }}" = "search-domain.us-east-1.es.amazonaws.com" ]; then
+            echo "Looking up OpenSearch endpoint with AWS CLI..."
+            OS_DOMAIN_NAME=$(aws opensearch list-domain-names --query "DomainNames[0].DomainName" --output text)
+            OPENSEARCH_ENDPOINT=$(aws opensearch describe-domain --domain-name $OS_DOMAIN_NAME --query "DomainStatus.Endpoint" --output text)
+            echo "OPENSEARCH_ENDPOINT=${OPENSEARCH_ENDPOINT}" >> $GITHUB_ENV
+          fi
+          
+          if [ -z "${{ env.LAMBDA_ROLE_ARN }}" ] || [ "${{ env.LAMBDA_ROLE_ARN }}" = "arn:aws:iam::123456789012:role/lambda-role-default" ]; then
+            echo "Looking up Lambda role ARN with AWS CLI..."
+            ROLE_NAME=$(aws iam list-roles --query "Roles[?contains(RoleName, 'lambda')].RoleName" --output text | head -n 1)
+            LAMBDA_ROLE_ARN=$(aws iam get-role --role-name $ROLE_NAME --query "Role.Arn" --output text)
+            echo "LAMBDA_ROLE_ARN=${LAMBDA_ROLE_ARN}" >> $GITHUB_ENV
+          fi
+      
+      # Debug environment variables after all lookups
+      - name: Debug Final Environment Variables
+        run: |
+          echo "Final environment variables:"
+          echo "INGESTION_BUCKET: ${{ env.INGESTION_BUCKET }}"
+          echo "FAILED_INGESTION_BUCKET: ${{ env.FAILED_INGESTION_BUCKET }}"
+          echo "OPENSEARCH_ENDPOINT: ${{ env.OPENSEARCH_ENDPOINT }}"
+          echo "LAMBDA_ROLE_ARN: ${{ env.LAMBDA_ROLE_ARN }}"
+      
       # ------------------------------
       # Phase 2: Serverless Lambda Deployment
       # ------------------------------
@@ -91,18 +152,38 @@ jobs:
       - name: Install Serverless plugins
         run: |
           if [ -f package.json ]; then npm ci; fi
+      
+      # Create a serverless variables file
+      - name: Create Serverless Variables File
+        run: |
+          echo "Creating serverless variables file..."
+          cat > serverless.env.yml << EOL
+          INGESTION_BUCKET: "${{ env.INGESTION_BUCKET }}"
+          FAILED_INGESTION_BUCKET: "${{ env.FAILED_INGESTION_BUCKET }}"
+          OPENSEARCH_ENDPOINT: "${{ env.OPENSEARCH_ENDPOINT }}"
+          LAMBDA_ROLE_ARN: "${{ env.LAMBDA_ROLE_ARN }}"
+          EOL
+          
+          cat serverless.env.yml
           
       # Serverless Deploy
       - name: Serverless Deploy
-        run: serverless deploy
+        run: |
+          # Add explicit environment variable exports as well
+          export INGESTION_BUCKET="${{ env.INGESTION_BUCKET }}"
+          export FAILED_INGESTION_BUCKET="${{ env.FAILED_INGESTION_BUCKET }}"
+          export OPENSEARCH_ENDPOINT="${{ env.OPENSEARCH_ENDPOINT }}"
+          export LAMBDA_ROLE_ARN="${{ env.LAMBDA_ROLE_ARN }}"
+          
+          serverless deploy --param-file=serverless.env.yml
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: us-east-1
-          LAMBDA_ROLE_ARN: ${{ env.LAMBDA_ROLE_ARN }}
           INGESTION_BUCKET: ${{ env.INGESTION_BUCKET }}
           FAILED_INGESTION_BUCKET: ${{ env.FAILED_INGESTION_BUCKET }}
           OPENSEARCH_ENDPOINT: ${{ env.OPENSEARCH_ENDPOINT }}
+          LAMBDA_ROLE_ARN: ${{ env.LAMBDA_ROLE_ARN }}
       
       # ------------------------------
       # Phase 3: Get Lambda ARN and Complete API Gateway Integration
@@ -110,9 +191,19 @@ jobs:
       - name: Get Lambda ARN for Ingest Function
         id: get_lambda_arn
         run: |
+          echo "Fetching Lambda ARN..."
           LAMBDA_ARN=$(aws lambda get-function --function-name ingest-function --query 'Configuration.FunctionArn' --output text)
-          echo "LAMBDA_INVOKE_ARN=$(echo $LAMBDA_ARN | sed 's/function/invocation/')" >> $GITHUB_ENV
+          echo "Raw Lambda ARN: ${LAMBDA_ARN}"
+          
+          # Format the Lambda invoke ARN
+          REGION=$(aws configure get region || echo "us-east-1")
+          LAMBDA_INVOKE_ARN="arn:aws:apigateway:${REGION}:lambda:path/2015-03-31/functions/${LAMBDA_ARN}/invocations"
+          
+          echo "Final Lambda Invoke ARN: ${LAMBDA_INVOKE_ARN}"
+          echo "LAMBDA_INVOKE_ARN=${LAMBDA_INVOKE_ARN}" >> $GITHUB_ENV
 
       - name: Terraform Apply (Phase 3 - Complete API Gateway Integration)
         working-directory: ./terraform
-        run: terraform apply -auto-approve -var "lambda_invoke_arn=${{ env.LAMBDA_INVOKE_ARN }}"
+        run: |
+          echo "Running final Terraform apply with Lambda invoke ARN: ${{ env.LAMBDA_INVOKE_ARN }}"
+          terraform apply -auto-approve -var "lambda_invoke_arn=${{ env.LAMBDA_INVOKE_ARN }}"
