@@ -50,9 +50,9 @@ jobs:
       - name: Export Terraform Outputs
         working-directory: ./terraform
         run: |
-          echo "INGESTION_BUCKET=$(terraform output -raw bucket_name)" >> $GITHUB_ENV
+          echo "INGESTION_BUCKET=$(terraform output -raw s3_bucket_name)" >> $GITHUB_ENV
           echo "FAILED_INGESTION_BUCKET=$(terraform output -raw failed_ingestion_bucket)" >> $GITHUB_ENV
-          echo "OPENSEARCH_ENDPOINT=$(terraform output -raw opensearch_endpoint)" >> $GITHUB_ENV
+          echo "OPENSEARCH_ENDPOINT=$(terraform output -raw opensearch_domain_endpoint)" >> $GITHUB_ENV
           echo "MY_LAMBDA_ROLE_ARN=$(terraform output -raw lambda_role_arn)" >> $GITHUB_ENV
       
       # ------------------------------
