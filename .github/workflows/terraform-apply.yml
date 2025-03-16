@@ -39,13 +39,12 @@ jobs:
         run: terraform init
       
       # ------------------------------
-      # Phase 1: Infrastructure Deployment
+      # Phase 1: Infrastructure Deployment (without API Gateway integration)
       # ------------------------------
-      - name: Terraform Apply (Phase 1 - Infrastructure)
+      - name: Terraform Apply (Phase 1 - Base Infrastructure)
         working-directory: ./terraform
-        run: terraform apply -auto-approve
-        # Note: Your Terraform code should be written so that API Gateway integration resources
-        # (that depend on the Lambda ARN) are conditionally created (e.g. count = var.ingest_lambda_function_arn == "" ? 0 : 1)
+        run: terraform apply -auto-approve -var "lambda_invoke_arn="
+        # This will create the API Gateway but without Lambda integration
       
       # Export Terraform outputs for Serverless use
       - name: Export Terraform Outputs
@@ -55,7 +54,7 @@ jobs:
           echo "FAILED_INGESTION_BUCKET=$(terraform output -raw failed_ingestion_bucket)" >> $GITHUB_ENV
           echo "OPENSEARCH_ENDPOINT=$(terraform output -raw opensearch_endpoint)" >> $GITHUB_ENV
           echo "MY_LAMBDA_ROLE_ARN=$(terraform output -raw lambda_role_arn)" >> $GITHUB_ENV
-          echo "LAMBDA_INVOKE_ARN=$(terraform output -raw lambda_invoke_arn)" >> $GITHUB_ENV
+      
       # ------------------------------
       # Phase 2: Serverless Lambda Deployment
       # ------------------------------
@@ -99,14 +98,14 @@ jobs:
           OPENSEARCH_ENDPOINT: ${{ env.OPENSEARCH_ENDPOINT }}
       
       # ------------------------------
-      # Phase 3: Update API Gateway Integration in Terraform
+      # Phase 3: Get Lambda ARN and Complete API Gateway Integration
       # ------------------------------
       - name: Get Lambda ARN for Ingest Function
         id: get_lambda_arn
         run: |
-          INGEST_LAMBDA_ARN=$(aws lambda get-function --function-name ingest-function --query 'Configuration.FunctionArn' --output text)
-          echo "INGEST_LAMBDA_ARN=${INGEST_LAMBDA_ARN}" >> $GITHUB_ENV
+          LAMBDA_ARN=$(aws lambda get-function --function-name ingest-function --query 'Configuration.FunctionArn' --output text)
+          echo "LAMBDA_INVOKE_ARN=$(echo $LAMBDA_ARN | sed 's/function/invocation/')" >> $GITHUB_ENV
 
-      - name: Terraform Apply (Phase 3 - API Gateway Integration)
+      - name: Terraform Apply (Phase 3 - Complete API Gateway Integration)
         working-directory: ./terraform
         run: terraform apply -auto-approve -var "lambda_invoke_arn=${{ env.LAMBDA_INVOKE_ARN }}"

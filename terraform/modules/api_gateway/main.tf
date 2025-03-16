@@ -1,41 +1,49 @@
+locals {
+  create_api_gateway = var.lambda_invoke_arn != null && var.lambda_invoke_arn != ""
+}
+
+# Use local.create_api_gateway for conditional creation
 resource "aws_api_gateway_rest_api" "this" {
+  count       = local.create_api_gateway ? 1 : 0
   name        = var.api_name
   description = var.api_description
 }
 
 resource "aws_api_gateway_resource" "query_resource" {
-  rest_api_id = aws_api_gateway_rest_api.this.id
-  parent_id   = aws_api_gateway_rest_api.this.root_resource_id
+  count       = local.create_api_gateway ? 1 : 0
+  rest_api_id = aws_api_gateway_rest_api.this[0].id
+  parent_id   = aws_api_gateway_rest_api.this[0].root_resource_id
   path_part   = var.resource_path
 }
 
 resource "aws_api_gateway_method" "post_method" {
-  rest_api_id   = aws_api_gateway_rest_api.this.id
-  resource_id   = aws_api_gateway_resource.query_resource.id
+  count         = local.create_api_gateway ? 1 : 0
+  rest_api_id   = aws_api_gateway_rest_api.this[0].id
+  resource_id   = aws_api_gateway_resource.query_resource[0].id
   http_method   = "POST"
   authorization = "NONE"
 }
 
 resource "aws_api_gateway_integration" "lambda_integration" {
-  count                   = var.lambda_invoke_arn != null ? 1 : 0
-  rest_api_id             = aws_api_gateway_rest_api.this.id
-  resource_id             = aws_api_gateway_resource.query_resource.id
-  http_method             = aws_api_gateway_method.post_method.http_method
+  count                   = local.create_api_gateway ? 1 : 0
+  rest_api_id             = aws_api_gateway_rest_api.this[0].id
+  resource_id             = aws_api_gateway_resource.query_resource[0].id
+  http_method             = aws_api_gateway_method.post_method[0].http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
   uri                     = var.lambda_invoke_arn
 }
 
 resource "aws_api_gateway_deployment" "this" {
+  count       = local.create_api_gateway ? 1 : 0
   depends_on  = [aws_api_gateway_integration.lambda_integration[0]]
-  rest_api_id = aws_api_gateway_rest_api.this.id
+  rest_api_id = aws_api_gateway_rest_api.this[0].id
   
-  # Force a new deployment when configuration changes
   triggers = {
     redeployment = sha1(jsonencode([
-      aws_api_gateway_resource.query_resource.id,
-      aws_api_gateway_method.post_method.id,
-      var.lambda_invoke_arn != null ? aws_api_gateway_integration.lambda_integration[0].id : "none"
+      aws_api_gateway_resource.query_resource[0].id,
+      aws_api_gateway_method.post_method[0].id,
+      aws_api_gateway_integration.lambda_integration[0].id
     ]))
   }
   
@@ -45,7 +53,8 @@ resource "aws_api_gateway_deployment" "this" {
 }
 
 resource "aws_api_gateway_stage" "this" {
-  deployment_id = aws_api_gateway_deployment.this.id
-  rest_api_id   = aws_api_gateway_rest_api.this.id
+  count         = local.create_api_gateway ? 1 : 0
+  deployment_id = aws_api_gateway_deployment.this[0].id
+  rest_api_id   = aws_api_gateway_rest_api.this[0].id
   stage_name    = var.stage_name
 }
