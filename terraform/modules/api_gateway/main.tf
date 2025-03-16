@@ -1,9 +1,3 @@
-variable "lambda_invoke_arn" {
-  description = "The Lambda invoke ARN from serverless"
-  type        = string
-  default     = null
-}
-
 locals {
   create_api_gateway = var.lambda_invoke_arn != null && var.lambda_invoke_arn != ""
 }
