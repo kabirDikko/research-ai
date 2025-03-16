@@ -44,16 +44,6 @@ jobs:
       - name: Terraform Apply (Phase 1 - Base Infrastructure)
         working-directory: ./terraform
         run: terraform apply -auto-approve -var "lambda_invoke_arn="
-        # This will create the API Gateway but without Lambda integration
-      
-      # Export Terraform outputs for Serverless use
-      - name: Export Terraform Outputs
-        working-directory: ./terraform
-        run: |
-          echo "INGESTION_BUCKET=$(terraform output -raw s3_bucket_name)" >> $GITHUB_ENV
-          echo "FAILED_INGESTION_BUCKET=$(terraform output -raw failed_ingestion_bucket)" >> $GITHUB_ENV
-          echo "OPENSEARCH_ENDPOINT=$(terraform output -raw opensearch_domain_endpoint)" >> $GITHUB_ENV
-          echo "LAMBDA_ROLE_ARN=$(terraform output -raw lambda_role_arn)" >> $GITHUB_ENV
       
       # ------------------------------
       # Phase 2: Serverless Lambda Deployment
@@ -85,27 +75,37 @@ jobs:
         run: |
           if [ -f package.json ]; then npm ci; fi
           
-      # Serverless Deploy
+      # Serverless Deploy with direct AWS lookups
       - name: Serverless Deploy
-        run: serverless deploy
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: us-east-1
-          LAMBDA_ROLE_ARN: ${{ env.LAMBDA_ROLE_ARN }}
-          INGESTION_BUCKET: ${{ env.INGESTION_BUCKET }}
-          FAILED_INGESTION_BUCKET: ${{ env.FAILED_INGESTION_BUCKET }}
-          OPENSEARCH_ENDPOINT: ${{ env.OPENSEARCH_ENDPOINT }}
+        run: |
+          # Look up necessary resources directly with AWS CLI
+          INGESTION_BUCKET=$(aws s3api list-buckets --query "Buckets[?contains(Name, 'ingestion')].Name" --output text | head -n 1)
+          ERROR_BUCKET=$(aws s3api list-buckets --query "Buckets[?contains(Name, 'failed-ingestion')].Name" --output text | head -n 1)
+          
+          # Look up OpenSearch domain endpoint
+          OS_DOMAIN_NAME=$(aws opensearch list-domain-names --query "DomainNames[0].DomainName" --output text)
+          OPENSEARCH_ENDPOINT=$(aws opensearch describe-domain --domain-name $OS_DOMAIN_NAME --query "DomainStatus.Endpoint" --output text)
+          
+          # Look up Lambda role ARN
+          ROLE_NAME=$(aws iam list-roles --query "Roles[?contains(RoleName, 'lambda')].RoleName" --output text | head -n 1)
+          LAMBDA_ROLE_ARN=$(aws iam get-role --role-name $ROLE_NAME --query "Role.Arn" --output text)
+          
+          # Deploy with Serverless using the looked-up values
+          serverless deploy \
+            --param="INGESTION_BUCKET=$INGESTION_BUCKET" \
+            --param="FAILED_INGESTION_BUCKET=$ERROR_BUCKET" \
+            --param="OPENSEARCH_ENDPOINT=$OPENSEARCH_ENDPOINT" \
+            --param="MY_LAMBDA_ROLE_ARN=$LAMBDA_ROLE_ARN"
       
       # ------------------------------
       # Phase 3: Get Lambda ARN and Complete API Gateway Integration
       # ------------------------------
-      - name: Get Lambda ARN for Ingest Function
-        id: get_lambda_arn
-        run: |
-          LAMBDA_ARN=$(aws lambda get-function --function-name ingest-function --query 'Configuration.FunctionArn' --output text)
-          echo "LAMBDA_INVOKE_ARN=$(echo $LAMBDA_ARN | sed 's/function/invocation/')" >> $GITHUB_ENV
-
-      - name: Terraform Apply (Phase 3 - Complete API Gateway Integration)
+      - name: Terraform Apply with Lambda integration
         working-directory: ./terraform
-        run: terraform apply -auto-approve -var "lambda_invoke_arn=${{ env.LAMBDA_INVOKE_ARN }}"
+        run: |
+          # Lookup Lambda ARN directly with AWS CLI
+          LAMBDA_ARN=$(aws lambda list-functions --query "Functions[?FunctionName=='ingest-function'].FunctionArn" --output text)
+          LAMBDA_INVOKE_ARN=$(echo $LAMBDA_ARN | sed 's/function/invocation/')
+          
+          # Apply Terraform with the Lambda ARN
+          terraform apply -auto-approve -var "lambda_invoke_arn=$LAMBDA_INVOKE_ARN"
