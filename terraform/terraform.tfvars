@@ -1,7 +1,7 @@
 region                = "us-east-1"
-s3_bucket_name        = "research-ingestion-bucket"
-ingest_zip_file       = "../lambda_functions/ingest_function/ingest.zip"
-query_zip_file        = "../lambda_functions/query_function/query.zip"
+ingestion_bucket_name        = "research-ingestion-bucket"
+processed_ingestion_bucket_name = "research-processed-ingestion-bucket"
+failed_ingestion_bucket_name = "research-failed-ingestion-bucket"
 bedrock_endpoint_url  = "https://bedrock.example.com"
 
 # OpenSearch Serverless specific variables

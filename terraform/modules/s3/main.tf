@@ -1,5 +1,13 @@
-resource "aws_s3_bucket" "this" {
-  bucket = var.bucket_name
+resource "aws_s3_bucket" "ingestion_bucket" {
+  bucket = var.ingestion_bucket_name
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+resource "aws_s3_bucket" "processed_ingestion_bucket" {
+  bucket = var.processed_ingestion_bucket_name
 
   lifecycle {
     prevent_destroy = true
@@ -7,8 +15,8 @@ resource "aws_s3_bucket" "this" {
 }
 
 # Create a bucket for failed ingestions
-resource "aws_s3_bucket" "failed_ingestion" {
-  bucket = "${var.bucket_name}-failed-ingestion"
+resource "aws_s3_bucket" "failed_ingestion_bucket" {
+  bucket = var.failed_ingestion_bucket_name
 
   lifecycle {
     prevent_destroy = true
@@ -17,7 +25,7 @@ resource "aws_s3_bucket" "failed_ingestion" {
 
 # Add lifecycle policy to failed ingestion bucket to expire objects after a certain period
 resource "aws_s3_bucket_lifecycle_configuration" "failed_ingestion_lifecycle" {
-  bucket = aws_s3_bucket.failed_ingestion.id
+  bucket = aws_s3_bucket.failed_ingestion_bucket.id
 
   rule {
     id     = "expire-failed-ingestions"
