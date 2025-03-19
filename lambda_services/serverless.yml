@@ -24,6 +24,7 @@ functions:
       - s3:
           bucket: ${env:INGESTION_BUCKET}    # This bucket is created by Terraform
           event: s3:ObjectCreated:*
+          existing: true  # Tell Serverless this bucket already exists
     environment:
       OPENSEARCH_ENDPOINT: ${env:OPENSEARCH_ENDPOINT}
       INGESTION_BUCKET: ${env:INGESTION_BUCKET}
