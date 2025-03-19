@@ -88,6 +88,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: us-east-1
+          SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
           INGESTION_BUCKET: ${{ env.INGESTION_BUCKET }}
           FAILED_INGESTION_BUCKET: ${{ env.FAILED_INGESTION_BUCKET }}
           OPENSEARCH_ENDPOINT: ${{ env.OPENSEARCH_ENDPOINT }}
