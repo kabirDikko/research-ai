@@ -19,7 +19,7 @@ custom:
 functions:
   ingest:
     name: ingest-function
-    handler: lambda_functions/image_conversion_service/ingest.lambda_handler
+    handler: ./image_conversion_service/ingest.lambda_handler
     events:
       - s3:
           bucket: ${env:INGESTION_BUCKET}    # This bucket is created by Terraform
@@ -31,7 +31,7 @@ functions:
       FAILED_INGESTION_BUCKET: ${env:FAILED_INGESTION_BUCKET}
   query:
     name: query-function
-    handler: lambda_functions/query_function/query.lambda_handler
+    handler: ./query_function/query.lambda_handler
     environment:
       OPENSEARCH_ENDPOINT: ${env:OPENSEARCH_ENDPOINT}
       BEDROCK_ENDPOINT: ${env:BEDROCK_ENDPOINT, 'default-endpoint'}
