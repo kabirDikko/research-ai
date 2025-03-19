@@ -22,13 +22,18 @@ functions:
     handler: image_conversion_service.ingest.lambda_handler
     events:
       - s3:
-          bucket: ${env:INGESTION_BUCKET}    # This bucket is created by Terraform
+          bucket: ${env:INGESTION_BUCKET}
           event: s3:ObjectCreated:*
-          existing: true  # Tell Serverless this bucket already exists
+          existing: true
+      - s3:
+          bucket: ${env:PROCESSED_INGESTION_BUCKET}
+          event: s3:ObjectCreated:*
+          existing: true
     environment:
       OPENSEARCH_ENDPOINT: ${env:OPENSEARCH_ENDPOINT}
       INGESTION_BUCKET: ${env:INGESTION_BUCKET}
       FAILED_INGESTION_BUCKET: ${env:FAILED_INGESTION_BUCKET}
+      PROCESSED_INGESTION_BUCKET: ${env:PROCESSED_INGESTION_BUCKET}
   query:
     name: query-function
     handler: query_function.query.lambda_handler

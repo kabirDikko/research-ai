@@ -90,7 +90,9 @@ resource "aws_iam_role_policy" "lambda_policy" {
 
 module "s3" {
   source      = "./modules/s3"
-  bucket_name = var.s3_bucket_name
+  ingestion_bucket_name = var.ingestion_bucket_name
+  processed_ingestion_bucket_name = var.processed_ingestion_bucket_name
+  failed_ingestion_bucket_name = var.failed_ingestion_bucket_name
 }
 
 module "opensearch" {

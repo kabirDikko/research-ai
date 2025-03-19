@@ -1,6 +1,3 @@
-output "s3_bucket_name" {
-  value = module.s3.bucket_name
-}
 
 output "opensearch_domain_endpoint" {
   value = module.opensearch.collection_endpoint
@@ -16,9 +13,13 @@ output "lambda_role_arn" {
 }
 
 output "ingestion_bucket_name" {
-  value = module.s3.bucket_name
+  value = module.s3.ingestion_bucket_name
 }
 
 output "failed_ingestion_bucket_name" {
   value = module.s3.failed_ingestion_bucket_name
 }
+
+output "processed_ingestion_bucket_name" {
+  value = module.s3.processed_ingestion_bucket_name
+} 

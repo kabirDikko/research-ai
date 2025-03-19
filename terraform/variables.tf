@@ -4,21 +4,25 @@ variable "region" {
   default     = "us-east-1"
 }
 
-variable "s3_bucket_name" {
+variable "ingestion_bucket_name" {
   description = "Name of the S3 bucket to store documents"
   type        = string
-  default     = "your-unique-bucket-name"
+
 }
 
-variable "ingest_zip_file" {
-  description = "Path to the zipped code for the ingest lambda function"
+variable "processed_ingestion_bucket_name" {
+  description = "Name of the S3 bucket to store processed documents"
   type        = string
+
 }
 
-variable "query_zip_file" {
-  description = "Path to the zipped code for the query lambda function"
+variable "failed_ingestion_bucket_name" {
+  description = "Name of the S3 bucket to store failed documents"
   type        = string
+
 }
+
+
 
 variable "bedrock_endpoint_url" {
   description = "The Bedrock endpoint URL for LLM inference"
