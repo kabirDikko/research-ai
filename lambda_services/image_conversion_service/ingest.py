@@ -11,7 +11,7 @@ s3_client = boto3.client('s3')
 INGESTION_BUCKET = os.environ.get('INGESTION_BUCKET')
 FAILED_INGESTION_BUCKET = os.environ.get('FAILED_INGESTION_BUCKET')
 
-def handler(event, context):
+def lambda_handler(event, context):
     processed_files = []
     failed_files = []
 
