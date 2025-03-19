@@ -5,7 +5,7 @@ provider:
   runtime: python3.9
   stage: dev
   region: us-east-1
-  role: ${env:MY_LAMBDA_ROLE_ARN}
+  role: ${env:LAMBDA_ROLE_ARN}
   environment:
     OPENSEARCH_ENDPOINT: ${env:OPENSEARCH_ENDPOINT}
 
@@ -33,4 +33,4 @@ functions:
     handler: lambda_functions/query_function/query.lambda_handler
     environment:
       OPENSEARCH_ENDPOINT: ${env:OPENSEARCH_ENDPOINT}
-      BEDROCK_ENDPOINT: ${env:BEDROCK_ENDPOINT}
+      BEDROCK_ENDPOINT: ${env:BEDROCK_ENDPOINT, 'default-endpoint'}
