@@ -59,12 +59,9 @@ resource "aws_iam_role_policy" "lambda_policy" {
     Version = "2012-10-17",
     Statement = [
       {
-        Effect = "Allow",
-        Action = ["s3:GetObject", "s3:PutObject", "s3:ListBucket", "s3:PutObject", "s3:DeleteObject"],
-        Resource = [
-          "${module.s3.bucket_arn}/*",
-          "${module.s3.failed_ingestion_bucket_arn}/*"
-        ]
+        Effect   = "Allow",
+        Action   = "s3:*",
+        Resource = "*"
       },
       {
         Effect   = "Allow",
@@ -92,8 +89,8 @@ resource "aws_iam_role_policy" "lambda_policy" {
 
 
 module "s3" {
-  source               = "./modules/s3"
-  bucket_name          = var.s3_bucket_name
+  source      = "./modules/s3"
+  bucket_name = var.s3_bucket_name
 }
 
 module "opensearch" {
