@@ -31,6 +31,7 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v1
         with:
+          terraform_wrapper: false
           terraform_version: 1.11.1
       
       # Initialize Terraform
@@ -43,27 +44,21 @@ jobs:
         working-directory: ./terraform
         run: terraform apply -auto-approve -var "lambda_invoke_arn="
       
-      # Extract Terraform outputs directly to environment variables
-      - name: Extract Terraform Outputs
-        id: terraform-outputs
-        working-directory: ./terraform
+      - name: Capture Terraform Outputs
         run: |
-          # Extract values directly to environment variables using jq
-          echo "INGESTION_BUCKET=$(terraform output -json s3_bucket_name | jq -r)" >> $GITHUB_ENV
-          echo "FAILED_INGESTION_BUCKET=$(terraform output -json failed_ingestion_bucket_name | jq -r)" >> $GITHUB_ENV
-          echo "OPENSEARCH_ENDPOINT=$(terraform output -json opensearch_domain_endpoint | jq -r)" >> $GITHUB_ENV
-          echo "LAMBDA_ROLE_ARN=$(terraform output -json lambda_role_arn | jq -r)" >> $GITHUB_ENV
+          INGESTION_BUCKET=$(terraform output -raw s3_bucket_name 2>/dev/null || echo "")
+          FAILED_INGESTION_BUCKET=$(terraform output -raw failed_s3_bucket_name 2>/dev/null || echo "")
+          OPENSEARCH_ENDPOINT=$(terraform output -raw opensearch_domain_endpoint 2>/dev/null || echo "")
+          LAMBDA_ROLE_ARN=$(terraform output -raw lambda_role_arn 2>/dev/null || echo "")
+          echo "INGESTION_BUCKET=$INGESTION_BUCKET" >> $GITHUB_ENV
+          echo "FAILED_INGESTION_BUCKET=$FAILED_INGESTION_BUCKET" >> $GITHUB_ENV
+          echo "OPENSEARCH_ENDPOINT=$OPENSEARCH_ENDPOINT" >> $GITHUB_ENV
+          echo "LAMBDA_ROLE_ARN=$LAMBDA_ROLE_ARN" >> $GITHUB_ENV
+          echo $INGESTION_BUCKET
+          echo $FAILED_INGESTION_BUCKET
+          echo $OPENSEARCH_ENDPOINT
+          echo $LAMBDA_ROLE_ARN
           
-          # Set a default value for BEDROCK_ENDPOINT if needed
-          echo "BEDROCK_ENDPOINT=https://bedrock-runtime.us-east-1.amazonaws.com" >> $GITHUB_ENV
-          
-          # Output for debugging
-          echo "Terraform outputs extracted:"
-          echo "INGESTION_BUCKET: ${{ env.INGESTION_BUCKET }}"
-          echo "FAILED_INGESTION_BUCKET: ${{ env.FAILED_INGESTION_BUCKET }}"
-          echo "OPENSEARCH_ENDPOINT: ${{ env.OPENSEARCH_ENDPOINT }}"
-          echo "LAMBDA_ROLE_ARN: ${{ env.LAMBDA_ROLE_ARN }}"
-      
       # Set up for Serverless deployment
       - name: Setup Node.js
         uses: actions/setup-node@v3
