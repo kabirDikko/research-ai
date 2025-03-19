@@ -60,7 +60,7 @@ resource "aws_iam_role_policy" "lambda_policy" {
     Statement = [
       {
         Effect = "Allow",
-        Action = ["s3:GetObject", "s3:PutObject", "s3:CopyObject"],
+        Action = ["s3:GetObject", "s3:PutObject", "s3:CopyObject", "s3:ListBucket","s3:ListObjects"],
         Resource = [
           "${module.s3.bucket_arn}/*",
           "${module.s3.failed_ingestion_bucket_arn}/*"
