@@ -44,15 +44,21 @@ jobs:
         working-directory: ./terraform
         run: |
           terraform apply -auto-approve -var "lambda_invoke_arn="
-          INGESTION_BUCKET=$(terraform output -raw s3_bucket_name 2>/dev/null || echo "")
+          INGESTION_BUCKET=$(terraform output -raw ingestion_bucket_name 2>/dev/null || echo "")
+          PROCESSED_INGESTION_BUCKET=$(terraform output -raw processed_ingestion_bucket_name 2>/dev/null || echo "")
           FAILED_INGESTION_BUCKET=$(terraform output -raw failed_ingestion_bucket_name 2>/dev/null || echo "")
           OPENSEARCH_ENDPOINT=$(terraform output -raw opensearch_domain_endpoint 2>/dev/null || echo "")
           LAMBDA_ROLE_ARN=$(terraform output -raw lambda_role_arn 2>/dev/null || echo "")
+          PROCESSED_INGESTION_BUCKET=$(terraform output -raw processed_ingestion_bucket_name 2>/dev/null || echo "")
+          FAILED_INGESTION_BUCKET=$(terraform output -raw failed_ingestion_bucket_name 2>/dev/null || echo "")
+
           echo "INGESTION_BUCKET=$INGESTION_BUCKET" >> $GITHUB_ENV
+          echo "PROCESSED_INGESTION_BUCKET=$PROCESSED_INGESTION_BUCKET" >> $GITHUB_ENV
           echo "FAILED_INGESTION_BUCKET=$FAILED_INGESTION_BUCKET" >> $GITHUB_ENV
           echo "OPENSEARCH_ENDPOINT=$OPENSEARCH_ENDPOINT" >> $GITHUB_ENV
           echo "LAMBDA_ROLE_ARN=$LAMBDA_ROLE_ARN" >> $GITHUB_ENV
           echo $INGESTION_BUCKET
+          echo $PROCESSED_INGESTION_BUCKET
           echo $FAILED_INGESTION_BUCKET
           echo $OPENSEARCH_ENDPOINT
           echo $LAMBDA_ROLE_ARN
