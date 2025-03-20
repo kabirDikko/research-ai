@@ -22,7 +22,7 @@ output "failed_ingestion_bucket_name" {
 
 output "processed_ingestion_bucket_name" {
   value = module.s3.processed_ingestion_bucket_name
-} 
+}
 
 output "opensearch_dashboard_endpoint" {
   value = module.opensearch.dashboard_endpoint
