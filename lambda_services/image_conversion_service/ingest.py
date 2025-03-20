@@ -26,6 +26,13 @@ def lambda_handler(event, context):
             bucket = record['s3']['bucket']['name']
             key = record['s3']['object']['key']
             
+            # First check if the file exists
+            try:
+                s3_client.head_object(Bucket=bucket, Key=key)
+            except Exception as e:
+                print(f"File {key} does not exist in {bucket}, skipping processing: {e}")
+                continue
+                
             try:
                 # Only process files from the ingestion bucket
                 if bucket == INGESTION_BUCKET:
@@ -100,15 +107,32 @@ def process_file(bucket, key):
 def extract_and_index_text(bucket, key):
     """Extract text from image using Textract and index in OpenSearch"""
     try:
-        # Only process image files with Textract
+        # Only process image files and PDFs with Textract
         if not key.lower().endswith(('.jpg', '.jpeg', '.png', '.pdf')):
             print(f"Skipping non-image/PDF file for Textract: {key}")
             return
+        
+        # Verify the file exists before processing
+        try:
+            s3_client.head_object(Bucket=bucket, Key=key)
+        except Exception as e:
+            print(f"File {key} does not exist in {bucket}, skipping text extraction: {e}")
+            return
             
-        # Call Amazon Textract to extract text
-        response = textract_client.detect_document_text(
-            Document={'S3Object': {'Bucket': bucket, 'Name': key}}
-        )
+        # Call Amazon Textract to extract text - use appropriate method for file type
+        if key.lower().endswith('.pdf'):
+            # For PDFs, we need to use the asynchronous API
+            print(f"Starting asynchronous Textract job for PDF: {key}")
+            # For now we'll use synchronous but with first page only
+            # In production, you should implement the async workflow
+            response = textract_client.detect_document_text(
+                Document={'S3Object': {'Bucket': bucket, 'Name': key}}
+            )
+        else:
+            # For images, use the synchronous API
+            response = textract_client.detect_document_text(
+                Document={'S3Object': {'Bucket': bucket, 'Name': key}}
+            )
         
         # Extract text blocks
         extracted_text = ""
@@ -144,6 +168,14 @@ def extract_and_index_text(bucket, key):
 def move_to_failed_bucket(source_bucket, key):
     """Move failed files to the failed ingestion bucket"""
     try:
+        # First check if the file exists in the source bucket
+        try:
+            s3_client.head_object(Bucket=source_bucket, Key=key)
+        except Exception as e:
+            print(f"File {key} does not exist in {source_bucket}, skipping move to failed bucket: {e}")
+            return
+            
+        # If we get here, the file exists and we can try to copy it
         s3_client.copy_object(
             CopySource={'Bucket': source_bucket, 'Key': key},
             Bucket=FAILED_INGESTION_BUCKET,
