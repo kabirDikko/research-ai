@@ -105,7 +105,7 @@ jobs:
       - name: Get Lambda ARN
         run: |
           # Get Lambda ARN for the ingest function
-          LAMBDA_ARN=$(aws lambda get-function --function-name ingest-function --query 'Configuration.FunctionArn' --output text)
+          LAMBDA_ARN=$(aws lambda get-function --function-name query-function --query 'Configuration.FunctionArn' --output text)
           REGION=$(aws configure get region || echo "us-east-1")
           LAMBDA_INVOKE_ARN="arn:aws:apigateway:${REGION}:lambda:path/2015-03-31/functions/${LAMBDA_ARN}/invocations"
           
