@@ -1,6 +1,7 @@
 import os
 import boto3
 import time
+import urllib.parse
 from pillow_heif import register_heif_opener
 from PIL import Image
 import io
@@ -52,9 +53,12 @@ def lambda_handler(event, context):
     for record in event.get('Records', []):
         if record.get('s3'):
             bucket = record['s3']['bucket']['name']
-            key = record['s3']['object']['key']
+            # URL-decode the key to handle special characters and spaces
+            encoded_key = record['s3']['object']['key']
+            key = urllib.parse.unquote_plus(encoded_key)
             
-            print(f"Processing event for object {key} in bucket {bucket}")
+            print(f"Processing event for object - Original key: {encoded_key}")
+            print(f"Decoded key: {key}")
             
             # Check if the file exists with retry logic
             if not check_s3_object_exists_with_retry(bucket, key):
