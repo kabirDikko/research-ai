@@ -43,6 +43,14 @@ functions:
       INGESTION_BUCKET: ${env:INGESTION_BUCKET}
       FAILED_INGESTION_BUCKET: ${env:FAILED_INGESTION_BUCKET}
       PROCESSED_INGESTION_BUCKET: ${env:PROCESSED_INGESTION_BUCKET}
+  ingest-from-failed:
+    name: ingest-function-failed
+    handler: image_conversion_service.ingest.lambda_handler
+    events:
+      - s3:
+          bucket: ${env:FAILED_INGESTION_BUCKET}
+          event: s3:ObjectCreated:*
+          existing: true
   query:
     name: query-function
     handler: query_function.query.lambda_handler
