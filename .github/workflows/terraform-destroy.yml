@@ -17,6 +17,27 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
+      - name: Set up Node.js for Serverless
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install Serverless Framework
+        run: npm install -g serverless
+
+      - name: Install Serverless Plugins
+        working-directory: ./lambda_services
+        run: npm install --save-dev serverless-python-requirements
+
+      - name: Remove Serverless Stack
+        working-directory: ./lambda_services
+        run: serverless remove
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
+          SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
+
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v1
         with:
@@ -26,16 +47,56 @@ jobs:
         working-directory: ./terraform
         run: terraform init
 
+      - name: Get S3 Bucket Names from Terraform State
+        working-directory: ./terraform
+        run: |
+          INGESTION_BUCKET=$(terraform output -raw ingestion_bucket_name 2>/dev/null || echo "")
+          PROCESSED_INGESTION_BUCKET=$(terraform output -raw processed_ingestion_bucket_name 2>/dev/null || echo "")
+          FAILED_INGESTION_BUCKET=$(terraform output -raw failed_ingestion_bucket_name 2>/dev/null || echo "")
+          
+          echo "INGESTION_BUCKET=$INGESTION_BUCKET" >> $GITHUB_ENV
+          echo "PROCESSED_INGESTION_BUCKET=$PROCESSED_INGESTION_BUCKET" >> $GITHUB_ENV
+          echo "FAILED_INGESTION_BUCKET=$FAILED_INGESTION_BUCKET" >> $GITHUB_ENV
+          
+          echo "Buckets to empty and delete:"
+          echo "Ingestion Bucket: $INGESTION_BUCKET"
+          echo "Processed Ingestion Bucket: $PROCESSED_INGESTION_BUCKET"
+          echo "Failed Ingestion Bucket: $FAILED_INGESTION_BUCKET"
+
+      - name: Empty S3 Buckets
+        run: |
+          # Function to safely empty a bucket if it exists
+          empty_bucket() {
+            local bucket_name=$1
+            if [ -z "$bucket_name" ]; then
+              echo "Bucket name is empty, skipping"
+              return
+            fi
+            
+            # Check if bucket exists
+            if aws s3api head-bucket --bucket "$bucket_name" 2>/dev/null; then
+              echo "Emptying bucket: $bucket_name"
+              # Remove all objects including versions and delete markers
+              aws s3api list-object-versions --bucket "$bucket_name" --output json --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}} + {Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}' | \
+              jq 'if .Objects then {Objects: .Objects, Quiet: true} else null end' | \
+              grep -v "null" | \
+              xargs -0 -I {} aws s3api delete-objects --bucket "$bucket_name" --delete '{}'
+              
+              # Remove remaining objects (if any)
+              aws s3 rm s3://"$bucket_name" --recursive
+              echo "Bucket $bucket_name emptied successfully"
+            else
+              echo "Bucket $bucket_name does not exist or is not accessible, skipping"
+            fi
+          }
+          
+          # Empty each bucket
+          empty_bucket "${{ env.INGESTION_BUCKET }}"
+          empty_bucket "${{ env.PROCESSED_INGESTION_BUCKET }}"
+          empty_bucket "${{ env.FAILED_INGESTION_BUCKET }}"
+
       - name: Terraform Destroy (excluding S3 buckets)
         working-directory: ./terraform
         run: |
-          terraform destroy -auto-approve \
-            -target="module.lambda" \
-            -target="module.api_gateway" \
-            -target="module.opensearch" \
-            -target="module.bedrock" \
-            -target="aws_iam_role_policy.lambda_policy" \
-            -target="aws_iam_role.lambda_role" \
-            -target="aws_opensearchserverless_vpc_endpoint.vpc_endpoint" \
-            -target="aws_security_group.vpc_endpoint" \
-            -target="module.vpc"
+          terraform destroy -auto-approve 
+            
