@@ -25,6 +25,8 @@ functions:
           bucket: ${env:INGESTION_BUCKET}
           event: s3:ObjectCreated:*
           existing: true
+          forceDeploy: true
+
     environment:
       OPENSEARCH_ENDPOINT: ${env:OPENSEARCH_ENDPOINT}
       INGESTION_BUCKET: ${env:INGESTION_BUCKET}
@@ -38,6 +40,7 @@ functions:
           bucket: ${env:PROCESSED_INGESTION_BUCKET}
           event: s3:ObjectCreated:*
           existing: true
+          forceDeploy: true
     environment:
       OPENSEARCH_ENDPOINT: ${env:OPENSEARCH_ENDPOINT}
       INGESTION_BUCKET: ${env:INGESTION_BUCKET}
@@ -51,6 +54,7 @@ functions:
           bucket: ${env:FAILED_INGESTION_BUCKET}
           event: s3:ObjectCreated:*
           existing: true
+          forceDeploy: true
   query:
     name: query-function
     handler: query_function.query.lambda_handler
