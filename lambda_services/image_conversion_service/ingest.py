@@ -1,5 +1,6 @@
 import os
 import boto3
+import time
 from pillow_heif import register_heif_opener
 from PIL import Image
 import io
@@ -16,6 +17,33 @@ INGESTION_BUCKET = os.environ.get('INGESTION_BUCKET')
 FAILED_INGESTION_BUCKET = os.environ.get('FAILED_INGESTION_BUCKET')
 PROCESSED_INGESTION_BUCKET = os.environ.get('PROCESSED_INGESTION_BUCKET')
 
+def get_s3_object_with_retry(bucket, key, max_retries=3):
+    """Get an S3 object with retry logic to handle eventual consistency"""
+    for attempt in range(max_retries):
+        try:
+            return s3_client.get_object(Bucket=bucket, Key=key)
+        except s3_client.exceptions.NoSuchKey:
+            if attempt == max_retries - 1:
+                raise
+            print(f"Object {key} not found in {bucket} (attempt {attempt+1}/{max_retries}), retrying...")
+            time.sleep(2 ** attempt)  # Exponential backoff
+
+def check_s3_object_exists_with_retry(bucket, key, max_retries=3):
+    """Check if an S3 object exists with retry logic"""
+    for attempt in range(max_retries):
+        try:
+            s3_client.head_object(Bucket=bucket, Key=key)
+            return True
+        except s3_client.exceptions.ClientError as e:
+            if e.response['Error']['Code'] == '404' or e.response['Error']['Code'] == 'NoSuchKey':
+                if attempt == max_retries - 1:
+                    return False
+                print(f"Object {key} not found in {bucket} (attempt {attempt+1}/{max_retries}), retrying...")
+                time.sleep(2 ** attempt)  # Exponential backoff
+            else:
+                # If it's a different error, raise it
+                raise e
+
 def lambda_handler(event, context):
     processed_files = []
     failed_files = []
@@ -26,11 +54,12 @@ def lambda_handler(event, context):
             bucket = record['s3']['bucket']['name']
             key = record['s3']['object']['key']
             
-            # First check if the file exists
-            try:
-                s3_client.head_object(Bucket=bucket, Key=key)
-            except Exception as e:
-                print(f"File {key} does not exist in {bucket}, skipping processing: {e}")
+            print(f"Processing event for object {key} in bucket {bucket}")
+            
+            # Check if the file exists with retry logic
+            if not check_s3_object_exists_with_retry(bucket, key):
+                print(f"File {key} does not exist in {bucket} after multiple attempts, skipping processing")
+                failed_files.append(key)
                 continue
                 
             try:
@@ -43,7 +72,7 @@ def lambda_handler(event, context):
                     extract_and_index_text(bucket, key)
                     processed_files.append(key)
             except Exception as e:
-                print(f"Error processing {key}: {e}")
+                print(f"Error processing {key}: {str(e)}")
                 move_to_failed_bucket(bucket, key)
                 failed_files.append(key)
 
@@ -64,8 +93,8 @@ def process_file(bucket, key):
         if key.lower().endswith(('.heic', '.heif', '.tiff', '.tif')):
             dest_key = os.path.splitext(key)[0] + '.jpg'
             
-            # Get the file from S3
-            response = s3_client.get_object(Bucket=bucket, Key=key)
+            # Get the file from S3 with retry logic
+            response = get_s3_object_with_retry(bucket, key)
             image_data = response['Body'].read()
 
             with io.BytesIO(image_data) as image_bytes:
@@ -98,9 +127,8 @@ def process_file(bucket, key):
             )
             print(f"Successfully moved {key} to processed bucket")
             
-            
     except Exception as e:
-        print(f"Error processing file {key}: {e}")
+        print(f"Error processing file {key}: {str(e)}")
         move_to_failed_bucket(bucket, key)
         raise e
 
@@ -112,11 +140,9 @@ def extract_and_index_text(bucket, key):
             print(f"Skipping non-image/PDF file for Textract: {key}")
             return
         
-        # Verify the file exists before processing
-        try:
-            s3_client.head_object(Bucket=bucket, Key=key)
-        except Exception as e:
-            print(f"File {key} does not exist in {bucket}, skipping text extraction: {e}")
+        # Verify the file exists before processing with retry logic
+        if not check_s3_object_exists_with_retry(bucket, key):
+            print(f"File {key} does not exist in {bucket} after multiple attempts, skipping text extraction")
             return
             
         # Call Amazon Textract to extract text - use appropriate method for file type
@@ -162,17 +188,15 @@ def extract_and_index_text(bucket, key):
         else:
             print(f"No text extracted from {key}")
     except Exception as e:
-        print(f"Error extracting or indexing text from {key}: {e}")
+        print(f"Error extracting or indexing text from {key}: {str(e)}")
         # Don't raise the exception to allow processing to continue
 
 def move_to_failed_bucket(source_bucket, key):
     """Move failed files to the failed ingestion bucket"""
     try:
-        # First check if the file exists in the source bucket
-        try:
-            s3_client.head_object(Bucket=source_bucket, Key=key)
-        except Exception as e:
-            print(f"File {key} does not exist in {source_bucket}, skipping move to failed bucket: {e}")
+        # Check if the file exists in the source bucket with retry logic
+        if not check_s3_object_exists_with_retry(source_bucket, key, max_retries=2):
+            print(f"File {key} does not exist in {source_bucket} after multiple attempts, skipping move to failed bucket")
             return
             
         # If we get here, the file exists and we can try to copy it
@@ -187,4 +211,4 @@ def move_to_failed_bucket(source_bucket, key):
         # Uncomment this if you want to delete after moving
         # s3_client.delete_object(Bucket=source_bucket, Key=key)
     except Exception as e:
-        print(f"Error moving failed file {key} to failed bucket: {e}")
+        print(f"Error moving failed file {key} to failed bucket: {str(e)}")
