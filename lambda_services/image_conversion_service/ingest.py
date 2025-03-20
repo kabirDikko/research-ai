@@ -169,6 +169,8 @@ def extract_and_index_text(bucket, key):
         for item in response["Blocks"]:
             if item["BlockType"] == "LINE":
                 extracted_text += item["Text"] + "\n"
+
+        print(f"Extracted text: {extracted_text}")
         
         if extracted_text.strip():
             # Index the extracted text in OpenSearch

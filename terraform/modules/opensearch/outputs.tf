@@ -1,3 +1,7 @@
 output "collection_endpoint" {
-  value = "https://${aws_opensearchserverless_collection.this.name}.aoss-serverless.${var.region}.opensearch.amazonaws.com"
+  value = aws_opensearchserverless_collection.this.collection_endpoint
+}
+
+output "dashboard_endpoint" {
+  value = aws_opensearchserverless_collection.this.dashboard_endpoint
 }
