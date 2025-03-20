@@ -21,6 +21,7 @@ jobs:
         uses: hashicorp/setup-terraform@v1
         with:
           terraform_version: 1.11.1
+          terraform_wrapper: false
 
       - name: Terraform Init
         working-directory: ./terraform
@@ -30,18 +31,18 @@ jobs:
         working-directory: ./terraform
         run: |
           # Get the Lambda role ARN and other required values
-          LAMBDA_ROLE_ARN=$(terraform output -raw lambda_role_arn 2>/dev/null || echo "")
           INGESTION_BUCKET=$(terraform output -raw ingestion_bucket_name 2>/dev/null || echo "")
           PROCESSED_INGESTION_BUCKET=$(terraform output -raw processed_ingestion_bucket_name 2>/dev/null || echo "")
           FAILED_INGESTION_BUCKET=$(terraform output -raw failed_ingestion_bucket_name 2>/dev/null || echo "")
           OPENSEARCH_ENDPOINT=$(terraform output -raw opensearch_domain_endpoint 2>/dev/null || echo "")
+          LAMBDA_ROLE_ARN=$(terraform output -raw lambda_role_arn 2>/dev/null || echo "")
           
           # Set environment variables for subsequent steps
-          echo "LAMBDA_ROLE_ARN=$LAMBDA_ROLE_ARN" >> $GITHUB_ENV
           echo "INGESTION_BUCKET=$INGESTION_BUCKET" >> $GITHUB_ENV
           echo "PROCESSED_INGESTION_BUCKET=$PROCESSED_INGESTION_BUCKET" >> $GITHUB_ENV
           echo "FAILED_INGESTION_BUCKET=$FAILED_INGESTION_BUCKET" >> $GITHUB_ENV
           echo "OPENSEARCH_ENDPOINT=$OPENSEARCH_ENDPOINT" >> $GITHUB_ENV
+          echo "LAMBDA_ROLE_ARN=$LAMBDA_ROLE_ARN" >> $GITHUB_ENV
           
           echo "Values extracted from Terraform:"
           echo "Lambda Role ARN: $LAMBDA_ROLE_ARN"
@@ -50,32 +51,63 @@ jobs:
           echo "Failed Ingestion Bucket: $FAILED_INGESTION_BUCKET"
           echo "OpenSearch Endpoint: $OPENSEARCH_ENDPOINT"
 
-      - name: Set up Node.js for Serverless
+      # Set up for Serverless removal
+      - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      
+      # Install dependencies
+      - name: Install dependencies
+        run: |
+          npm install -g serverless
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          
+          # Install serverless plugins
+          cd lambda_services
+          npm install --save-dev serverless-python-requirements
+          cd ..
 
-      - name: Install Serverless Framework
-        run: npm install -g serverless
-
-      - name: Install Serverless Plugins
+      # Remove serverless stack
+      - name: Serverless Remove
         working-directory: ./lambda_services
-        run: npm install --save-dev serverless-python-requirements
-
-      - name: Remove Serverless Stack
-        working-directory: ./lambda_services
-        run: serverless remove
+        run: serverless remove --verbose
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: us-east-1
           SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
-          LAMBDA_ROLE_ARN: ${{ env.LAMBDA_ROLE_ARN }}
           INGESTION_BUCKET: ${{ env.INGESTION_BUCKET }}
           PROCESSED_INGESTION_BUCKET: ${{ env.PROCESSED_INGESTION_BUCKET }}
           FAILED_INGESTION_BUCKET: ${{ env.FAILED_INGESTION_BUCKET }}
           OPENSEARCH_ENDPOINT: ${{ env.OPENSEARCH_ENDPOINT }}
+          LAMBDA_ROLE_ARN: ${{ env.LAMBDA_ROLE_ARN }}
           BEDROCK_ENDPOINT: "default-endpoint"
+
+      # Check for any remaining Lambda functions and remove them
+      - name: Check for remaining Lambda functions
+        run: |
+          echo "Checking for any remaining Lambda functions with prefix 'ingest-function' or 'query-function'"
+          FUNCTIONS=$(aws lambda list-functions --query "Functions[?starts_with(FunctionName, 'ingest-function') || starts_with(FunctionName, 'query-function')].FunctionName" --output text)
+          
+          if [ -n "$FUNCTIONS" ]; then
+            echo "Found Lambda functions that need to be manually deleted:"
+            echo "$FUNCTIONS"
+            
+            # Delete each remaining function
+            for function in $FUNCTIONS; do
+              echo "Deleting Lambda function: $function"
+              aws lambda delete-function --function-name $function
+            done
+          else
+            echo "No remaining Lambda functions found."
+          fi
 
       - name: Empty S3 Buckets
         run: |
@@ -109,7 +141,7 @@ jobs:
           empty_bucket "${{ env.PROCESSED_INGESTION_BUCKET }}"
           empty_bucket "${{ env.FAILED_INGESTION_BUCKET }}"
 
-      - name: Terraform Destroy
+      - name: Terraform Destroy Infrastructure
         working-directory: ./terraform
         run: |
           terraform destroy -auto-approve 
