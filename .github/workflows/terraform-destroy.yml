@@ -17,6 +17,39 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v1
+        with:
+          terraform_version: 1.11.1
+
+      - name: Terraform Init
+        working-directory: ./terraform
+        run: terraform init
+
+      - name: Get Required Values from Terraform
+        working-directory: ./terraform
+        run: |
+          # Get the Lambda role ARN and other required values
+          LAMBDA_ROLE_ARN=$(terraform output -raw lambda_role_arn 2>/dev/null || echo "")
+          INGESTION_BUCKET=$(terraform output -raw ingestion_bucket_name 2>/dev/null || echo "")
+          PROCESSED_INGESTION_BUCKET=$(terraform output -raw processed_ingestion_bucket_name 2>/dev/null || echo "")
+          FAILED_INGESTION_BUCKET=$(terraform output -raw failed_ingestion_bucket_name 2>/dev/null || echo "")
+          OPENSEARCH_ENDPOINT=$(terraform output -raw opensearch_domain_endpoint 2>/dev/null || echo "")
+          
+          # Set environment variables for subsequent steps
+          echo "LAMBDA_ROLE_ARN=$LAMBDA_ROLE_ARN" >> $GITHUB_ENV
+          echo "INGESTION_BUCKET=$INGESTION_BUCKET" >> $GITHUB_ENV
+          echo "PROCESSED_INGESTION_BUCKET=$PROCESSED_INGESTION_BUCKET" >> $GITHUB_ENV
+          echo "FAILED_INGESTION_BUCKET=$FAILED_INGESTION_BUCKET" >> $GITHUB_ENV
+          echo "OPENSEARCH_ENDPOINT=$OPENSEARCH_ENDPOINT" >> $GITHUB_ENV
+          
+          echo "Values extracted from Terraform:"
+          echo "Lambda Role ARN: $LAMBDA_ROLE_ARN"
+          echo "Ingestion Bucket: $INGESTION_BUCKET"
+          echo "Processed Ingestion Bucket: $PROCESSED_INGESTION_BUCKET"
+          echo "Failed Ingestion Bucket: $FAILED_INGESTION_BUCKET"
+          echo "OpenSearch Endpoint: $OPENSEARCH_ENDPOINT"
+
       - name: Set up Node.js for Serverless
         uses: actions/setup-node@v3
         with:
@@ -37,31 +70,12 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: us-east-1
           SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
-
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v1
-        with:
-          terraform_version: 1.11.1
-
-      - name: Terraform Init
-        working-directory: ./terraform
-        run: terraform init
-
-      - name: Get S3 Bucket Names from Terraform State
-        working-directory: ./terraform
-        run: |
-          INGESTION_BUCKET=$(terraform output -raw ingestion_bucket_name 2>/dev/null || echo "")
-          PROCESSED_INGESTION_BUCKET=$(terraform output -raw processed_ingestion_bucket_name 2>/dev/null || echo "")
-          FAILED_INGESTION_BUCKET=$(terraform output -raw failed_ingestion_bucket_name 2>/dev/null || echo "")
-          
-          echo "INGESTION_BUCKET=$INGESTION_BUCKET" >> $GITHUB_ENV
-          echo "PROCESSED_INGESTION_BUCKET=$PROCESSED_INGESTION_BUCKET" >> $GITHUB_ENV
-          echo "FAILED_INGESTION_BUCKET=$FAILED_INGESTION_BUCKET" >> $GITHUB_ENV
-          
-          echo "Buckets to empty and delete:"
-          echo "Ingestion Bucket: $INGESTION_BUCKET"
-          echo "Processed Ingestion Bucket: $PROCESSED_INGESTION_BUCKET"
-          echo "Failed Ingestion Bucket: $FAILED_INGESTION_BUCKET"
+          LAMBDA_ROLE_ARN: ${{ env.LAMBDA_ROLE_ARN }}
+          INGESTION_BUCKET: ${{ env.INGESTION_BUCKET }}
+          PROCESSED_INGESTION_BUCKET: ${{ env.PROCESSED_INGESTION_BUCKET }}
+          FAILED_INGESTION_BUCKET: ${{ env.FAILED_INGESTION_BUCKET }}
+          OPENSEARCH_ENDPOINT: ${{ env.OPENSEARCH_ENDPOINT }}
+          BEDROCK_ENDPOINT: "default-endpoint"
 
       - name: Empty S3 Buckets
         run: |
@@ -95,7 +109,7 @@ jobs:
           empty_bucket "${{ env.PROCESSED_INGESTION_BUCKET }}"
           empty_bucket "${{ env.FAILED_INGESTION_BUCKET }}"
 
-      - name: Terraform Destroy (excluding S3 buckets)
+      - name: Terraform Destroy
         working-directory: ./terraform
         run: |
           terraform destroy -auto-approve 
