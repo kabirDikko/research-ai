@@ -19,27 +19,6 @@ INGESTION_BUCKET = os.environ.get('INGESTION_BUCKET')
 FAILED_INGESTION_BUCKET = os.environ.get('FAILED_INGESTION_BUCKET')
 PROCESSED_INGESTION_BUCKET = os.environ.get('PROCESSED_INGESTION_BUCKET')
 
-def get_valid_opensearch_url():
-    """Ensure we have a valid OpenSearch URL with proper scheme"""
-    global opensearch_endpoint
-    
-    if not opensearch_endpoint:
-        print("WARNING: OpenSearch endpoint is not configured!")
-        return None
-        
-    # Add https:// if no scheme is present
-    if not opensearch_endpoint.startswith(('http://', 'https://')):
-        opensearch_endpoint = f"https://{opensearch_endpoint}"
-        
-    # Remove trailing slash if present
-    if opensearch_endpoint.endswith('/'):
-        opensearch_endpoint = opensearch_endpoint[:-1]
-        
-    print(f"Using OpenSearch endpoint: {opensearch_endpoint}")
-    return opensearch_endpoint
-
-# Initialize the endpoint
-opensearch_endpoint = get_valid_opensearch_url()
 
 def get_s3_object_with_retry(bucket, key, max_retries=3):
     """Get an S3 object with retry logic to handle eventual consistency"""
@@ -219,11 +198,7 @@ def extract_and_index_text(bucket, key):
                 "timestamp": datetime.datetime.now().isoformat()
             }
             print(opensearch_endpoint)
-            # Check if OpenSearch endpoint is configured
-            if not opensearch_endpoint:
-                print("ERROR: OpenSearch endpoint is not configured. Cannot index document.")
-                return
-                
+                        
             # Create a safe document ID using just the filename
             index_id = sanitize_id(os.path.basename(key))
             
