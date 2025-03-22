@@ -218,7 +218,7 @@ def extract_and_index_text(bucket, key):
                 "source_bucket": bucket,
                 "timestamp": datetime.datetime.now().isoformat()
             }
-            
+            print(opensearch_endpoint)
             # Check if OpenSearch endpoint is configured
             if not opensearch_endpoint:
                 print("ERROR: OpenSearch endpoint is not configured. Cannot index document.")
