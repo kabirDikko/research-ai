@@ -19,9 +19,27 @@ INGESTION_BUCKET = os.environ.get('INGESTION_BUCKET')
 FAILED_INGESTION_BUCKET = os.environ.get('FAILED_INGESTION_BUCKET')
 PROCESSED_INGESTION_BUCKET = os.environ.get('PROCESSED_INGESTION_BUCKET')
 
-
+def get_valid_opensearch_url():
+    """Ensure we have a valid OpenSearch URL with proper scheme"""
+    global opensearch_endpoint
     
-print(f"Using OpenSearch endpoint: {opensearch_endpoint}")
+    if not opensearch_endpoint:
+        print("WARNING: OpenSearch endpoint is not configured!")
+        return None
+        
+    # Add https:// if no scheme is present
+    if not opensearch_endpoint.startswith(('http://', 'https://')):
+        opensearch_endpoint = f"https://{opensearch_endpoint}"
+        
+    # Remove trailing slash if present
+    if opensearch_endpoint.endswith('/'):
+        opensearch_endpoint = opensearch_endpoint[:-1]
+        
+    print(f"Using OpenSearch endpoint: {opensearch_endpoint}")
+    return opensearch_endpoint
+
+# Initialize the endpoint
+opensearch_endpoint = get_valid_opensearch_url()
 
 def get_s3_object_with_retry(bucket, key, max_retries=3):
     """Get an S3 object with retry logic to handle eventual consistency"""
@@ -201,20 +219,33 @@ def extract_and_index_text(bucket, key):
                 "timestamp": datetime.datetime.now().isoformat()
             }
             
+            # Check if OpenSearch endpoint is configured
+            if not opensearch_endpoint:
+                print("ERROR: OpenSearch endpoint is not configured. Cannot index document.")
+                return
+                
             # Create a safe document ID using just the filename
             index_id = sanitize_id(os.path.basename(key))
             
+            # Force the https:// scheme if not present
+            endpoint = opensearch_endpoint
+            if not endpoint.startswith(('http://', 'https://')):
+                endpoint = f"https://{endpoint}"
+                
             # Ensure the URL is properly formed
-            url = f"{opensearch_endpoint}/documents/_doc/{index_id}"
+            url = f"{endpoint}/documents/_doc/{index_id}"
             
-            print(f"Indexing document to OpenSearch: {index_id}")
+            print(f"Indexing document to OpenSearch URL: {url}")
             headers = {"Content-Type": "application/json"}
             
-            response = requests.put(url, headers=headers, data=json.dumps(document))
-            if response.status_code >= 200 and response.status_code < 300:
-                print(f"Successfully indexed text from {key}")
-            else:
-                print(f"Failed to index text from {key}: {response.text}")
+            try:
+                response = requests.put(url, headers=headers, data=json.dumps(document))
+                if response.status_code >= 200 and response.status_code < 300:
+                    print(f"Successfully indexed text from {key}")
+                else:
+                    print(f"Failed to index text from {key}: {response.status_code} - {response.text}")
+            except requests.exceptions.RequestException as e:
+                print(f"ERROR: Failed to connect to OpenSearch: {str(e)}")
         else:
             print(f"No text extracted from {key}")
     except Exception as e:
