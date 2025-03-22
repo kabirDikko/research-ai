@@ -113,9 +113,13 @@ def process_file(bucket, key):
         raise ValueError(f"Unsupported file type: {key}")
 
     try:
+        # Get just the filename without any folder structure
+        filename = os.path.basename(key)
+        
         # Determine output format
         if key.lower().endswith(('.heic', '.heif', '.tiff', '.tif')):
-            dest_key = os.path.splitext(key)[0] + '.jpg'
+            # Use just the base filename without path for the destination
+            dest_filename = os.path.splitext(filename)[0] + '.jpg'
             
             # Get the file from S3 with retry logic
             response = get_s3_object_with_retry(bucket, key)
@@ -136,20 +140,20 @@ def process_file(bucket, key):
 
                 s3_client.put_object(
                     Bucket=PROCESSED_INGESTION_BUCKET,
-                    Key=dest_key,
+                    Key=dest_filename,
                     Body=jpeg_buffer.getvalue(),
                     ContentType='image/jpeg'
                 )
                 
-                print(f"Successfully converted {key} to JPEG and moved to processed bucket as {dest_key}")
+                print(f"Successfully converted {key} to JPEG and moved to processed bucket as {dest_filename}")
         else:
-            # For other file types, just copy to processed bucket
+            # For other file types, just copy to processed bucket with just the filename
             s3_client.copy_object(
                 CopySource={'Bucket': bucket, 'Key': key},
                 Bucket=PROCESSED_INGESTION_BUCKET,
-                Key=key
+                Key=filename
             )
-            print(f"Successfully moved {key} to processed bucket")
+            print(f"Successfully moved {key} to processed bucket as {filename}")
             
     except Exception as e:
         print(f"Error processing file {key}: {str(e)}")
@@ -195,7 +199,7 @@ def extract_and_index_text(bucket, key):
         if extracted_text.strip():
             # Index the extracted text in OpenSearch
             document = {
-                "filename": key,
+                "filename": os.path.basename(key),  # Just use the filename without path
                 "extracted_text": extracted_text,
                 "source_bucket": bucket,
                 "timestamp": datetime.datetime.now().isoformat()
@@ -206,8 +210,8 @@ def extract_and_index_text(bucket, key):
                 print("OpenSearch endpoint not configured, skipping indexing")
                 return
                 
-            # Create a safe document ID
-            index_id = sanitize_id(key)
+            # Create a safe document ID using just the filename
+            index_id = sanitize_id(os.path.basename(key))
             
             # Ensure the URL is properly formed
             url = f"{opensearch_endpoint}/documents/_doc/{index_id}"
@@ -234,13 +238,16 @@ def move_to_failed_bucket(source_bucket, key):
             print(f"File {key} does not exist in {source_bucket} after multiple attempts, skipping move to failed bucket")
             return
             
+        # Get just the filename without any folder structure
+        filename = os.path.basename(key)
+        
         # If we get here, the file exists and we can try to copy it
         s3_client.copy_object(
             CopySource={'Bucket': source_bucket, 'Key': key},
             Bucket=FAILED_INGESTION_BUCKET,
-            Key=key
+            Key=filename
         )
-        print(f"Moved failed file {key} to failed bucket")
+        print(f"Moved failed file {key} to failed bucket as {filename}")
         
         # Delete the original file after copying to failed bucket
         # Uncomment this if you want to delete after moving
