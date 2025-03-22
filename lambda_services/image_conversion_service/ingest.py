@@ -19,9 +19,7 @@ INGESTION_BUCKET = os.environ.get('INGESTION_BUCKET')
 FAILED_INGESTION_BUCKET = os.environ.get('FAILED_INGESTION_BUCKET')
 PROCESSED_INGESTION_BUCKET = os.environ.get('PROCESSED_INGESTION_BUCKET')
 
-# Ensure OpenSearch endpoint has a scheme
-if opensearch_endpoint and not opensearch_endpoint.startswith(('http://', 'https://')):
-    opensearch_endpoint = f"https://{opensearch_endpoint}"
+
     
 print(f"Using OpenSearch endpoint: {opensearch_endpoint}")
 
@@ -193,8 +191,6 @@ def extract_and_index_text(bucket, key):
         for item in response["Blocks"]:
             if item["BlockType"] == "LINE":
                 extracted_text += item["Text"] + "\n"
-
-        print(f"Extracted text: {extracted_text}")
         
         if extracted_text.strip():
             # Index the extracted text in OpenSearch
@@ -205,18 +201,13 @@ def extract_and_index_text(bucket, key):
                 "timestamp": datetime.datetime.now().isoformat()
             }
             
-            # Send to OpenSearch - ensure we have a valid endpoint
-            if not opensearch_endpoint:
-                print("OpenSearch endpoint not configured, skipping indexing")
-                return
-                
             # Create a safe document ID using just the filename
             index_id = sanitize_id(os.path.basename(key))
             
             # Ensure the URL is properly formed
             url = f"{opensearch_endpoint}/documents/_doc/{index_id}"
             
-            print(f"Sending document to OpenSearch at URL: {url}")
+            print(f"Indexing document to OpenSearch: {index_id}")
             headers = {"Content-Type": "application/json"}
             
             response = requests.put(url, headers=headers, data=json.dumps(document))
