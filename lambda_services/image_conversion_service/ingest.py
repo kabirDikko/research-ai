@@ -8,6 +8,7 @@ import io
 import json
 import requests
 import datetime
+import re
 
 register_heif_opener()
 
@@ -17,6 +18,12 @@ opensearch_endpoint = os.environ.get('OPENSEARCH_ENDPOINT')
 INGESTION_BUCKET = os.environ.get('INGESTION_BUCKET')
 FAILED_INGESTION_BUCKET = os.environ.get('FAILED_INGESTION_BUCKET')
 PROCESSED_INGESTION_BUCKET = os.environ.get('PROCESSED_INGESTION_BUCKET')
+
+# Ensure OpenSearch endpoint has a scheme
+if opensearch_endpoint and not opensearch_endpoint.startswith(('http://', 'https://')):
+    opensearch_endpoint = f"https://{opensearch_endpoint}"
+    
+print(f"Using OpenSearch endpoint: {opensearch_endpoint}")
 
 def get_s3_object_with_retry(bucket, key, max_retries=3):
     """Get an S3 object with retry logic to handle eventual consistency"""
@@ -44,6 +51,19 @@ def check_s3_object_exists_with_retry(bucket, key, max_retries=3):
             else:
                 # If it's a different error, raise it
                 raise e
+
+def sanitize_id(key):
+    """Create a safe document ID for OpenSearch"""
+    # Replace slashes with underscores
+    doc_id = key.replace('/', '_')
+    # Replace spaces with underscores
+    doc_id = doc_id.replace(' ', '_')
+    # Remove any characters that aren't alphanumeric, underscore, or hyphen
+    doc_id = re.sub(r'[^\w\-]', '', doc_id)
+    # Ensure the ID isn't too long (OpenSearch has limits)
+    if len(doc_id) > 512:
+        doc_id = doc_id[:512]
+    return doc_id
 
 def lambda_handler(event, context):
     processed_files = []
@@ -181,10 +201,19 @@ def extract_and_index_text(bucket, key):
                 "timestamp": datetime.datetime.now().isoformat()
             }
             
-            # Send to OpenSearch
-            headers = {"Content-Type": "application/json"}
-            index_id = key.replace('/', '_')
+            # Send to OpenSearch - ensure we have a valid endpoint
+            if not opensearch_endpoint:
+                print("OpenSearch endpoint not configured, skipping indexing")
+                return
+                
+            # Create a safe document ID
+            index_id = sanitize_id(key)
+            
+            # Ensure the URL is properly formed
             url = f"{opensearch_endpoint}/documents/_doc/{index_id}"
+            
+            print(f"Sending document to OpenSearch at URL: {url}")
+            headers = {"Content-Type": "application/json"}
             
             response = requests.put(url, headers=headers, data=json.dumps(document))
             if response.status_code >= 200 and response.status_code < 300:
