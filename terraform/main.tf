@@ -74,6 +74,11 @@ resource "aws_iam_role_policy" "lambda_policy" {
         Resource = "*"
       },
       {
+        Effect   = "Allow",
+        Action   = "bedrock:InvokeModel",
+        Resource = "*"
+      },
+      {
         Effect = "Allow",
         Action = [
           "logs:CreateLogGroup",
@@ -89,7 +94,7 @@ resource "aws_iam_role_policy" "lambda_policy" {
 
 
 module "s3" {
-  source      = "./modules/s3"
+  source               = "./modules/s3"
   ingestion_bucket_name = var.ingestion_bucket_name
   processed_ingestion_bucket_name = var.processed_ingestion_bucket_name
   failed_ingestion_bucket_name = var.failed_ingestion_bucket_name
