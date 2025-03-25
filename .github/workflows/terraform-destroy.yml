@@ -108,6 +108,12 @@ jobs:
           else
             echo "No remaining Lambda functions found."
           fi
+          
+      # Delete custom resource Lambda function
+      - name: Delete Custom Resource Lambda Function
+        run: |
+          echo "Deleting custom resource Lambda function: aws/lambda/lambda-services-dev-custom-resource-existing-s3"
+          aws lambda delete-function --function-name aws/lambda/lambda-services-dev-custom-resource-existing-s3 || echo "Function not found or already deleted"
 
       - name: Empty S3 Buckets
         run: |
@@ -144,5 +150,4 @@ jobs:
       - name: Terraform Destroy Infrastructure
         working-directory: ./terraform
         run: |
-          terraform destroy -auto-approve 
-            
+          terraform destroy -auto-approve             
