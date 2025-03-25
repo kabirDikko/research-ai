@@ -19,6 +19,52 @@ INGESTION_BUCKET = os.environ.get('INGESTION_BUCKET')
 FAILED_INGESTION_BUCKET = os.environ.get('FAILED_INGESTION_BUCKET')
 PROCESSED_INGESTION_BUCKET = os.environ.get('PROCESSED_INGESTION_BUCKET')
 
+# Add Bedrock client for embeddings
+bedrock_runtime = boto3.client(
+    service_name='bedrock-runtime',
+    region_name=os.environ.get('AWS_REGION', 'us-east-1')
+)
+
+# Constants for embedding model
+EMBEDDING_MODEL_ID = "amazon.titan-embed-text-v1"
+EMBEDDING_DIMENSION = 1536  # Titan model dimension
+
+
+def get_embeddings(text, max_chunk_size=8000):
+    """
+    Generate embeddings using Amazon Bedrock Titan Embeddings model.
+    For longer texts, we chunk the text and create embeddings for each chunk.
+    """
+    if not text or not text.strip():
+        print("Empty text provided for embeddings")
+        return None
+        
+    try:
+        # Ensure we don't exceed the model's maximum input size
+        if len(text) > max_chunk_size:
+            print(f"Text exceeds maximum size, truncating to {max_chunk_size} characters")
+            text = text[:max_chunk_size]
+            
+        # Prepare request body
+        request_body = json.dumps({
+            "inputText": text
+        })
+        
+        # Call Bedrock to get embeddings
+        response = bedrock_runtime.invoke_model(
+            modelId=EMBEDDING_MODEL_ID,
+            body=request_body
+        )
+        
+        # Parse the response
+        response_body = json.loads(response.get("body").read())
+        embedding = response_body.get("embedding")
+        
+        return embedding
+    except Exception as e:
+        print(f"Error generating embeddings: {str(e)}")
+        return None
+
 
 def get_s3_object_with_retry(bucket, key, max_retries=3):
     """Get an S3 object with retry logic to handle eventual consistency"""
@@ -156,7 +202,7 @@ def process_file(bucket, key):
         raise e
 
 def extract_and_index_text(bucket, key):
-    """Extract text from image using Textract and index in OpenSearch"""
+    """Extract text from image using Textract, generate embeddings, and index in OpenSearch"""
     try:
         # Only process image files and PDFs with Textract
         if not key.lower().endswith(('.jpg', '.jpeg', '.png', '.pdf')):
@@ -190,15 +236,32 @@ def extract_and_index_text(bucket, key):
                 extracted_text += item["Text"] + "\n"
         
         if extracted_text.strip():
-            # Index the extracted text in OpenSearch
+            # Generate embeddings using Bedrock
+            print(f"Generating embeddings for extracted text from {key}")
+            vector_embedding = get_embeddings(extracted_text)
+            
+            if not vector_embedding:
+                print(f"Failed to generate embeddings for {key}, skipping indexing")
+                return
+                
+            # Index the extracted text and embeddings in OpenSearch
             document = {
                 "filename": os.path.basename(key),  # Just use the filename without path
-                "extracted_text": extracted_text,
-                "source_bucket": bucket,
-                "timestamp": datetime.datetime.now().isoformat()
+                "text": extracted_text,  # Text field for search
+                "vector": vector_embedding,  # Vector field for semantic search
+                "text-metadata": json.dumps({  # Metadata about the document
+                    "source_bucket": bucket,
+                    "source_key": key,
+                    "extraction_time": datetime.datetime.now().isoformat(),
+                    "file_type": os.path.splitext(key)[1][1:].lower()
+                })
             }
-            print(opensearch_endpoint)
-                        
+            
+            # Check if OpenSearch endpoint is configured
+            if not opensearch_endpoint:
+                print("ERROR: OpenSearch endpoint is not configured. Cannot index document.")
+                return
+                
             # Create a safe document ID using just the filename
             index_id = sanitize_id(os.path.basename(key))
             
@@ -210,13 +273,13 @@ def extract_and_index_text(bucket, key):
             # Ensure the URL is properly formed
             url = f"{endpoint}/documents/_doc/{index_id}"
             
-            print(f"Indexing document to OpenSearch URL: {url}")
+            print(f"Indexing document with embeddings to OpenSearch URL: {url}")
             headers = {"Content-Type": "application/json"}
             
             try:
                 response = requests.put(url, headers=headers, data=json.dumps(document))
                 if response.status_code >= 200 and response.status_code < 300:
-                    print(f"Successfully indexed text from {key}")
+                    print(f"Successfully indexed text and embeddings from {key}")
                 else:
                     print(f"Failed to index text from {key}: {response.status_code} - {response.text}")
             except requests.exceptions.RequestException as e:
