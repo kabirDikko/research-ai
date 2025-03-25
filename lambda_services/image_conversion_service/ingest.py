@@ -204,7 +204,7 @@ def process_file(bucket, key):
 def extract_and_index_text(bucket, key):
     """Extract text from image using Textract, generate embeddings, and index in OpenSearch"""
     try:
-        # Only process image files and PDFs with Textract
+        #TODO: Add support for other file types(.wav. mp3, etc.)
         if not key.lower().endswith(('.jpg', '.jpeg', '.png', '.pdf')):
             print(f"Skipping non-image/PDF file for Textract: {key}")
             return
@@ -218,22 +218,62 @@ def extract_and_index_text(bucket, key):
         if key.lower().endswith('.pdf'):
             # For PDFs, we need to use the asynchronous API
             print(f"Starting asynchronous Textract job for PDF: {key}")
-            # For now we'll use synchronous but with first page only
-            # In production, you should implement the async workflow
-            response = textract_client.detect_document_text(
-                Document={'S3Object': {'Bucket': bucket, 'Name': key}}
+            
+            # Start the asynchronous job
+            response = textract_client.start_document_text_detection(
+                DocumentLocation={'S3Object': {'Bucket': bucket, 'Name': key}}
             )
+            job_id = response['JobId']
+            print(f"Started Textract job with ID: {job_id}")
+            
+            # Wait for the job to complete
+            status = 'IN_PROGRESS'
+            while status == 'IN_PROGRESS':
+                time.sleep(5)
+                response = textract_client.get_document_text_detection(JobId=job_id)
+                status = response['JobStatus']
+                print(f"Textract job status: {status}")
+            
+            if status == 'SUCCEEDED':
+                # Get all pages of results
+                extracted_text = ""
+                pages = []
+                
+                # Get the first page of results
+                pages.append(response)
+                
+                # If there are more pages, get them
+                next_token = response.get('NextToken', None)
+                while next_token:
+                    response = textract_client.get_document_text_detection(
+                        JobId=job_id,
+                        NextToken=next_token
+                    )
+                    pages.append(response)
+                    next_token = response.get('NextToken', None)
+                
+                # Extract text from all pages
+                for page in pages:
+                    for item in page['Blocks']:
+                        if item['BlockType'] == 'LINE':
+                            extracted_text += item['Text'] + "\n"
+                
+                # Continue with the extracted text
+                print(f"Successfully extracted text from PDF: {key}")
+            else:
+                print(f"Textract job failed with status: {status}")
+                raise Exception(f"Textract job failed with status: {status}")
         else:
             # For images, use the synchronous API
             response = textract_client.detect_document_text(
                 Document={'S3Object': {'Bucket': bucket, 'Name': key}}
             )
-        
-        # Extract text blocks
-        extracted_text = ""
-        for item in response["Blocks"]:
-            if item["BlockType"] == "LINE":
-                extracted_text += item["Text"] + "\n"
+            
+            # Extract text blocks
+            extracted_text = ""
+            for item in response["Blocks"]:
+                if item["BlockType"] == "LINE":
+                    extracted_text += item["Text"] + "\n"
         
         if extracted_text.strip():
             # Generate embeddings using Bedrock
@@ -309,8 +349,6 @@ def move_to_failed_bucket(source_bucket, key):
         )
         print(f"Moved failed file {key} to failed bucket as {filename}")
         
-        # Delete the original file after copying to failed bucket
-        # Uncomment this if you want to delete after moving
-        # s3_client.delete_object(Bucket=source_bucket, Key=key)
+        #TODO: Delete the original file after copying to failed bucket
     except Exception as e:
         print(f"Error moving failed file {key} to failed bucket: {str(e)}")
