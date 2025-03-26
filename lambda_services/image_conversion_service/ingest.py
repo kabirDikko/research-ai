@@ -26,7 +26,7 @@ bedrock_runtime = boto3.client(
 )
 
 # Constants for embedding model
-EMBEDDING_MODEL_ID = "amazon.titan-embed-text-v1"
+EMBEDDING_MODEL_ID = "anthropic.claude-3-sonnet-20240229-v1:0"
 EMBEDDING_DIMENSION = 1536  # Titan model dimension
 
 
