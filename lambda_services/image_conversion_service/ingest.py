@@ -26,7 +26,7 @@ bedrock_runtime = boto3.client(
 )
 
 # Constants for embedding model
-EMBEDDING_MODEL_ID = "anthropic.claude-3-sonnet-20240229-v1:0"
+EMBEDDING_MODEL_ID = "amazon.titan-embed-text-v2:0"
 EMBEDDING_DIMENSION = 1536  # Titan model dimension
 
 
@@ -45,14 +45,18 @@ def get_embeddings(text, max_chunk_size=8000):
             print(f"Text exceeds maximum size, truncating to {max_chunk_size} characters")
             text = text[:max_chunk_size]
             
-        # Prepare request body
+        # Prepare the request body according to Titan embedding model requirements
         request_body = json.dumps({
-            "inputText": text
+            "inputText": text,
+            "dimensions": EMBEDDING_DIMENSION,
+            "normalize": True
         })
-        
+
         # Call Bedrock to get embeddings
         response = bedrock_runtime.invoke_model(
             modelId=EMBEDDING_MODEL_ID,
+            contentType="application/json",
+            accept="*/*",
             body=request_body
         )
         
